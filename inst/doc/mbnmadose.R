@@ -49,16 +49,16 @@ plot(goutnet, level="agent", doselink = 2, remove.loops = TRUE, label.distance =
 # Colour vertices by agent
 plot(goutnet, v.color = "agent", label.distance = 5)
 
-## ---- results="hide", message=FALSE, warning=FALSE, eval=FALSE-----------
-#  # Run a random effect split NMA using the alogliptin dataset
-#  alognet <- mbnma.network(alog_pcfb)
-#  nma.alog <- nma.run(alognet, method="random")
+## ---- results="hide", message=FALSE, warning=FALSE-----------------------
+# Run a random effect split NMA using the alogliptin dataset
+alognet <- mbnma.network(alog_pcfb)
+nma.alog <- nma.run(alognet, method="random")
 
-## ---- eval=FALSE---------------------------------------------------------
-#  print(nma.alog)
-#  
-#  # Draw plot of NMA estimates plotted by dose
-#  plot.nma(nma.alog)
+## ------------------------------------------------------------------------
+print(nma.alog)
+
+# Draw plot of NMA estimates plotted by dose
+plot(nma.alog)
 
 ## ---- results="hide", warning=FALSE--------------------------------------
 # Run an Emax dose-response MBNMA
@@ -72,20 +72,20 @@ summary(mbnma)
 #  # An alternative would be to use an Emax wrapper for mbnma.run() which would give the same result but with more easily interpretable parameter names
 #  mbnma.emax(tripnet, emax="rel", ed50="rel", method="common")
 
-## ---- eval=FALSE---------------------------------------------------------
-#  # Emax model with single parameter estimated for Emax
-#  emax <- mbnma.emax(tripnet, emax="rel", ed50="common", method="random")
-#  summary(emax)
+## ------------------------------------------------------------------------
+# Emax model with single parameter estimated for Emax
+emax <- mbnma.emax(tripnet, emax="rel", ed50="common", method="random")
+summary(emax)
 
-## ---- results="hide", message=FALSE, warning=FALSE, eval=FALSE-----------
-#  # Using the osteoarthritis dataset (contains info on classes)
-#  painnet <- mbnma.network(osteopain_2wkabs)
+## ---- results="hide", message=FALSE, warning=FALSE-----------------------
+# Using the osteoarthritis dataset (contains info on classes)
+painnet <- mbnma.network(osteopain_2wkabs)
 
-## ---- results="hide", eval=FALSE-----------------------------------------
-#  # Emax MBNMA with a single absolute parameter for Emax and random relative effects on ED50
-#  # Common class effects on ED50
-#  emax <- mbnma.emax(painnet, emax="common", ed50="rel", method="random",
-#                     class.effect=list(ed50="common"))
+## ---- results="hide"-----------------------------------------------------
+# Emax MBNMA with a single absolute parameter for Emax and random relative effects on ED50
+# Common class effects on ED50
+emax <- mbnma.emax(painnet, emax="common", ed50="rel", method="random",
+                   class.effect=list(ed50="common"))
 
 ## ---- eval=FALSE---------------------------------------------------------
 #  summary(emax)
@@ -105,8 +105,8 @@ summary(mbnma)
 #            beta.1 = "rel", beta.2 = "rel")
 #  
 
-## ---- eval=FALSE---------------------------------------------------------
-#  print(mbnma$model.arg$priors)
+## ------------------------------------------------------------------------
+print(mbnma$model.arg$priors)
 
 ## ---- eval=FALSE---------------------------------------------------------
 #  # Define replacement prior
@@ -158,26 +158,26 @@ plot(noplac.net, level="agent", remove.loops = TRUE, label.distance = 4,
 plot(noplac.net, level="agent", remove.loops = TRUE, label.distance = 4,
      doselink=3)
 
-## ---- results="hide", eval=FALSE-----------------------------------------
-#  nonparam <- mbnma.run(tripnet, fun="nonparam.up", method="random")
+## ---- results="hide"-----------------------------------------------------
+nonparam <- mbnma.run(tripnet, fun="nonparam.up", method="random")
 
-## ---- eval=FALSE---------------------------------------------------------
-#  print(nonparam)
+## ------------------------------------------------------------------------
+print(nonparam)
 
 ## ---- results="hide"-----------------------------------------------------
 tripnet <- mbnma.network(HF2PPITT)
 trip.emax <- mbnma.emax(tripnet, emax="rel", ed50="rel") 
 
-## ---- results="hide", eval=FALSE-----------------------------------------
-#  # Plot boxplots of residual deviance contributions (scatterplot is the default)
-#  devplot(trip.emax, plot.type = "box")
+## ---- results="hide"-----------------------------------------------------
+# Plot boxplots of residual deviance contributions (scatterplot is the default)
+devplot(trip.emax, plot.type = "box")
 
-## ---- results="hide", warning=FALSE, eval=FALSE--------------------------
-#  # Plot fitted and observed values with treatment labels
-#  fitplot(trip.emax)
+## ---- results="hide", warning=FALSE--------------------------------------
+# Plot fitted and observed values with treatment labels
+fitplot(trip.emax)
 
-## ---- results="hide", eval=FALSE-----------------------------------------
-#  plot(trip.emax)
+## ---- results="hide"-----------------------------------------------------
+plot(trip.emax)
 
 ## ------------------------------------------------------------------------
 ranks <- rank(trip.emax, direction = 1)
@@ -228,11 +228,11 @@ plot(pred)
 ## ------------------------------------------------------------------------
 plot(pred, disp.obs = TRUE, network=tripnet)
 
-## ---- results="hide", warning=FALSE, message=FALSE, eval=FALSE-----------
-#  alognet <- mbnma.network(alog_pcfb)
-#  alog.emax <- mbnma.emax(alognet, method="random")
-#  pred <- predict(alog.emax, E0=0, n.dose=20)
-#  plot(pred, overlay.split = TRUE, network=alognet, method="random")
+## ---- results="hide", warning=FALSE, message=FALSE-----------------------
+alognet <- mbnma.network(alog_pcfb)
+alog.emax <- mbnma.emax(alognet, method="random")
+pred <- predict(alog.emax, E0=0, n.dose=20)
+plot(pred, overlay.split = TRUE, network=alognet, method="random")
 
 ## ------------------------------------------------------------------------
 pred <- predict(trip.emax, E0=0.2, n.doses=4,
@@ -242,21 +242,21 @@ pred <- predict(trip.emax, E0=0.2, n.doses=4,
 ranks <- rank(pred)
 plot(ranks)
 
-## ---- results="hide", warning=FALSE, message=FALSE, eval=FALSE-----------
-#  # Using the alogliptin dataset
-#  alognet <- mbnma.network(alog_pcfb)
-#  nma <- nma.run(alognet, method="random")
-#  ume <- nma.run(alognet, method="random", UME = TRUE)
+## ---- results="hide", warning=FALSE, message=FALSE-----------------------
+# Using the alogliptin dataset
+alognet <- mbnma.network(alog_pcfb)
+nma <- nma.run(alognet, method="random")
+ume <- nma.run(alognet, method="random", UME = TRUE)
 
-## ---- echo=FALSE, eval=FALSE---------------------------------------------
-#  kable(data.frame(
-#    "Model"=c("NMA", "UME"),
-#    "resdev"=c(nma$jagsresult$BUGSoutput$median$totresdev,
-#                          ume$jagsresult$BUGSoutput$median$totresdev),
-#    "sd"=c(MBNMAdose:::neatCrI(nma$jagsresult$BUGSoutput$summary[rownames(nma$jagsresult$BUGSoutput$summary)=="sd", c(3,5,7)], digits = 2),
-#                         MBNMAdose:::neatCrI(ume$jagsresult$BUGSoutput$summary[rownames(ume$jagsresult$BUGSoutput$summary)=="sd", c(3,5,7)], digits=2))
-#  ), digits=2,
-#  col.names=c("Model", "Residual Deviance", "Betwen-study SD"))
+## ---- echo=FALSE---------------------------------------------------------
+kable(data.frame(
+  "Model"=c("NMA", "UME"),
+  "resdev"=c(nma$jagsresult$BUGSoutput$median$totresdev,
+                        ume$jagsresult$BUGSoutput$median$totresdev),
+  "sd"=c(MBNMAdose:::neatCrI(nma$jagsresult$BUGSoutput$summary[rownames(nma$jagsresult$BUGSoutput$summary)=="sd", c(3,5,7)], digits = 2),
+                       MBNMAdose:::neatCrI(ume$jagsresult$BUGSoutput$summary[rownames(ume$jagsresult$BUGSoutput$summary)=="sd", c(3,5,7)], digits=2))
+), digits=2,
+col.names=c("Model", "Residual Deviance", "Betwen-study SD"))
 
 ## ---- results="hide", warning=FALSE, message=FALSE, fig.show = "hide", eval=FALSE----
 #  # Using the triptans dataset
