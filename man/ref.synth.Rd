@@ -74,10 +74,10 @@ Defaults for \code{n.iter}, \code{n.burnin}, \code{n.thin} and \code{n.chains} a
 \code{mbnma}.
 }
 \examples{
+\donttest{
 # Using the triptans data
 network <- mbnma.network(HF2PPITT)
 
-\donttest{
 # Run an Emax dose-response MBNMA
 emax <- mbnma.emax(network, emax="rel", ed50="rel", method="random")
 

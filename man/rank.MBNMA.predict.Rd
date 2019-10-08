@@ -33,10 +33,10 @@ If \code{predict} contains multiple predictions at dose=0, then only the first o
 will be included, to avoid duplicating rankings.
 }
 \examples{
+\donttest{
 # Using the triptans data
 network <- mbnma.network(HF2PPITT)
 
-\donttest{
 # Rank predictions from a linear dose-response MBNMA
 linear <- mbnma.run(network, fun="linear")
 pred <- predict(linear, E0 = 0.5)

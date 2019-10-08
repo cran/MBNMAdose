@@ -155,43 +155,43 @@ test_that("check.likelink function correctly", {
 
 
 
-test_that("nma.run function correctly", {
-  n.iter <- 500
-
-  expect_warning(nma.run(network, method="common", n.iter=n.iter, warn.rhat = TRUE))
-
-  expect_warning(nma.run(network, method="common", n.iter=n.iter, warn.rhat = FALSE), NA)
-
-  result <- nma.run(network, method="random", n.iter=n.iter, warn.rhat = FALSE)
-  expect_equal(names(result), c("jagsresult", "trt.labs"))
-  expect_equal(all(c("d", "sd") %in% result$jagsresult$parameters.to.save), TRUE)
-
-  result <- nma.run(network, method="random", n.iter=n.iter, warn.rhat = FALSE,
-                    UME=TRUE)
-  expect_equal("d[1,1]" %in% rownames(result$jagsresult$BUGSoutput$summary), TRUE)
-
-
-  # Create broken network to test drop.discon
-  df.num <- mbnma.network(df)$data.ab
-  df.num$dose[df.num$studyID==3 & df.num$agent==1] <- 1
-  df.num$agent[df.num$studyID==3 & df.num$agent==1] <- 5
-  df.num <- df.num[!(df.num$studyID %in% c(3,11,14,16,21,29,31,37,39,40,43,44,51,63,70)),]
-
-  fullrow <- nrow(df.num)
-  network.disc <- mbnma.network(df.num)
-
-  result.1 <- nma.run(network.disc, method="random", n.iter=n.iter, warn.rhat = FALSE,
-                    UME=TRUE, drop.discon = TRUE)
-  result.2 <- nma.run(network.disc, method="random", n.iter=n.iter, warn.rhat = FALSE,
-                      UME=TRUE, drop.discon = FALSE)
-  result.3 <- nma.run(network.disc, method="random", n.iter=n.iter, warn.rhat = FALSE,
-                      UME=TRUE, drop.discon = TRUE)
-  expect_equal(length(result.1$trt.labs)!=length(result.2$trt.labs), TRUE)
-  expect_equal(length(result.1$trt.labs)==length(result.3$trt.labs), TRUE)
-})
-
-
-
+# test_that("nma.run function correctly", {
+#   n.iter <- 500
+#
+#   expect_warning(nma.run(network, method="common", n.iter=n.iter, warn.rhat = TRUE))
+#
+#   expect_warning(nma.run(network, method="common", n.iter=n.iter, warn.rhat = FALSE), NA)
+#
+#   result <- nma.run(network, method="random", n.iter=n.iter, warn.rhat = FALSE)
+#   expect_equal(names(result), c("jagsresult", "trt.labs"))
+#   expect_equal(all(c("d", "sd") %in% result$jagsresult$parameters.to.save), TRUE)
+#
+#   result <- nma.run(network, method="random", n.iter=n.iter, warn.rhat = FALSE,
+#                     UME=TRUE)
+#   expect_equal("d[1,1]" %in% rownames(result$jagsresult$BUGSoutput$summary), TRUE)
+#
+#
+#   # Create broken network to test drop.discon
+#   df.num <- mbnma.network(df)$data.ab
+#   df.num$dose[df.num$studyID==3 & df.num$agent==1] <- 1
+#   df.num$agent[df.num$studyID==3 & df.num$agent==1] <- 5
+#   df.num <- df.num[!(df.num$studyID %in% c(3,11,14,16,21,29,31,37,39,40,43,44,51,63,70)),]
+#
+#   fullrow <- nrow(df.num)
+#   network.disc <- mbnma.network(df.num)
+#
+#   result.1 <- nma.run(network.disc, method="random", n.iter=n.iter, warn.rhat = FALSE,
+#                     UME=TRUE, drop.discon = TRUE)
+#   result.2 <- nma.run(network.disc, method="random", n.iter=n.iter, warn.rhat = FALSE,
+#                       UME=TRUE, drop.discon = FALSE)
+#   result.3 <- nma.run(network.disc, method="random", n.iter=n.iter, warn.rhat = FALSE,
+#                       UME=TRUE, drop.discon = TRUE)
+#   expect_equal(length(result.1$trt.labs)!=length(result.2$trt.labs), TRUE)
+#   expect_equal(length(result.1$trt.labs)==length(result.3$trt.labs), TRUE)
+# })
+#
+#
+#
 # test_that("pDcalc functions correctly", {
 #   n.iter=1000
 #
@@ -245,12 +245,12 @@ test_that("nma.run function correctly", {
 #   result <- mbnma.run(network, fun="emax", beta.1="rel", beta.2="rel", method="common",
 #                       n.iter=500)
 #
-#   expect_error(mbnma.update(result, param="test"))
+#   expect_error(mbnma.update(result, param="test", n.iter=100))
 #
-#   update <- mbnma.update(result, param="resdev")
+#   update <- mbnma.update(result, param="resdev", n.iter=100)
 #   expect_equal(names(update), c("study", "arm", "mean", "facet", "fupdose", "groupvar"))
 #
-#   update <- mbnma.update(result, param="theta")
+#   update <- mbnma.update(result, param="theta", n.iter=100)
 #   expect_equal(names(update), c("study", "arm", "mean", "facet", "fupdose", "groupvar"))
 #
 # })

@@ -393,6 +393,8 @@ plot.mbnma <- function(x, params=NULL, agent.labs=NULL, class.labs=NULL, ...) {
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertClass(x, "mbnma", add=argcheck)
   checkmate::assertChoice(params, choices=x[["parameters.to.save"]], null.ok=TRUE, add=argcheck)
+  checkmate::assertCharacter(agent.labs, null.ok=TRUE, add=argcheck)
+  checkmate::assertCharacter(class.labs, null.ok=TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   # Check that specified params are modelled using relative effects
@@ -919,6 +921,7 @@ overlay.split <- function(g, network, method="common",
 #' and by treatment for `MBNMAtime`)
 #' @param ... Arguments to be sent to `ggplot2::geom_point()` or `ggplot2::geom_boxplot`
 #' @inheritParams predict.mbnma
+#' @inheritParams R2jags::jags
 #'
 #' @return Generates a plot of deviance contributions and returns a list containing the
 #' plot (as an object of `class(c("gg", "ggplot"))`), and a data.frame of posterior mean
@@ -934,10 +937,6 @@ overlay.split <- function(g, network, method="common",
 #' models is treated as unknown (if `rho = "estimate"`) and deviance contributions will be correlated.
 #'
 #' @examples
-#' ###########################
-#' ###### For MBNMAdose ######
-#' ###########################
-#'
 #' \donttest{
 #' # Using the triptans data
 #' network <- mbnma.network(HF2PPITT)
@@ -962,21 +961,19 @@ overlay.split <- function(g, network, method="common",
 #' # Other deviance contributions not currently implemented but in future
 #' #it will be possible to plot them like so
 #' #devplot(emax, dev.type="dev")
-#'
-#'
-#' ###########################
-#' ###### For MBNMAtime ######
-#' ###########################
 #' }
 #'
 #' @export
 devplot <- function(mbnma, plot.type="scatter", facet=TRUE, dev.type="resdev",
+                    n.iter=mbnma$BUGSoutput$n.iter, n.thin=mbnma$BUGSoutput$n.thin,
                     ...) {
   # Run checks
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertClass(mbnma, "mbnma", add=argcheck)
   checkmate::assertChoice(dev.type, choices = c("dev", "resdev"), add=argcheck)
   checkmate::assertChoice(plot.type, choices = c("scatter", "box"), add=argcheck)
+  checkmate::assertInt(n.iter, lower=1, null.ok = TRUE, add=argcheck)
+  checkmate::assertInt(n.thin, lower=1, upper=n.iter, null.ok = TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   if (!is.null(mbnma$model.arg$rho)) {
@@ -989,7 +986,7 @@ devplot <- function(mbnma, plot.type="scatter", facet=TRUE, dev.type="resdev",
                   "additional iterations will be run in order to obtain results for `", dev.type, "`")
     message(msg)
 
-    dev.df <- mbnma.update(mbnma, param=dev.type)
+    dev.df <- mbnma.update(mbnma, param=dev.type, n.iter=n.iter, n.thin=n.thin)
 
   } else {
 
@@ -1122,6 +1119,7 @@ get.theta.dev <- function(mbnma, param="theta") {
 #' plotted as points on the graph
 #' @param ... Arguments to be sent to `ggplot2::geom_point()` or `ggplot2::geom_line()`
 #' @inheritParams predict.mbnma
+#' @inheritParams R2jags::jags
 #'
 #' @return Generates a plot of fitted values from the MBNMA model and returns a list containing
 #' the plot (as an object of `class(c("gg", "ggplot"))`), and a data.frame of posterior mean
@@ -1153,11 +1151,14 @@ get.theta.dev <- function(mbnma, param="theta") {
 #' }
 #'
 #' @export
-fitplot <- function(mbnma, disp.obs=TRUE, ...) {
+fitplot <- function(mbnma, disp.obs=TRUE,
+                    n.iter=mbnma$BUGSoutput$n.iter, n.thin=mbnma$BUGSoutput$n.thin, ...) {
   # Run checks
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertClass(mbnma, "mbnma", add=argcheck)
   checkmate::assertLogical(disp.obs, add=argcheck)
+  checkmate::assertInt(n.iter, lower=1, null.ok = TRUE, add=argcheck)
+  checkmate::assertInt(n.thin, lower=1, upper=n.iter, null.ok = TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   if (!("theta" %in% mbnma$parameters.to.save)) {
@@ -1165,7 +1166,7 @@ fitplot <- function(mbnma, disp.obs=TRUE, ...) {
                   "additional iterations will be run in order to obtain results")
     message(msg)
 
-    theta.df <- mbnma.update(mbnma, param="theta")
+    theta.df <- mbnma.update(mbnma, param="theta", n.iter=n.iter, n.thin=n.thin)
   } else {
     theta.df <- get.theta.dev(mbnma, param="theta")
   }
@@ -1262,10 +1263,10 @@ fitplot <- function(mbnma, disp.obs=TRUE, ...) {
 #' which is an object of `class(c("gg", "ggplot"))`.
 #'
 #' @examples
+#' \donttest{
 #' # Using the triptans data
 #' network <- mbnma.network(HF2PPITT)
 #'
-#' \donttest{
 #' # Estimate rankings  from an Emax dose-response MBNMA
 #' emax <- mbnma.emax(network, emax="rel", ed50="rel", method="random")
 #' ranks <- rank(emax)

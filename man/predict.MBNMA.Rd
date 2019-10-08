@@ -15,7 +15,7 @@ a dose-response MBNMA model}
 \item{n.doses}{A number indicating the number of doses at which to make predictions
 within each agent. The default is \code{15}.}
 
-\item{max.doses}{A list of numbers. Each named element in the list corresponds to an
+\item{max.doses}{A list of numbers. Each named element in the list correponds to an
 agent (either named similarly to agent names given in the data, or named
 correspondingly to the codes for agents given in \code{mbnma})
 and each number for that element corresponds to the maximum dose of the given agent, below which several
@@ -37,7 +37,7 @@ to non-sensical predictions.
 \item \code{numeric()} A single numeric value representing the deterministic response at dose = 0,
 given on the natural scale - so for binomial data, proportions should be given and
 for Poisson data, a rate should be given.
-\item \code{character()} A single string representing a stochastic distribution for the response
+\item \code{character()} A single string respresenting a stochastic distribution for the response
 at dose = 0, given on the natural scale - so for binomial data, proportions should be given and
 for Poisson data, a rate should be given. This is specified as a random number generator
 (RNG) given as a string, and can take any RNG distribution for which a function exists
@@ -90,10 +90,10 @@ agent. This may be more useful when ranking different predicted responses using
 }
 }
 \examples{
+\donttest{
 # Using the triptans data
 network <- mbnma.network(HF2PPITT)
 
-\donttest{
 # Run an Emax dose-response MBNMA
 emax <- mbnma.emax(network, emax="rel", ed50="rel", method="random")
 
@@ -106,9 +106,9 @@ emax <- mbnma.emax(network, emax="rel", ed50="rel", method="random")
 # Data is binomial so we specify E0 on the natural scale as a probability
 pred <- predict(emax, E0 = 0.2)
 
-# Specifying non-sensical values will return a warning or error
+# Specifying non-sensical values will return an error
 #pred <- predict(emax, E0 = -10)
-### WARNING ###
+### ERROR ###
 
 #### Predict responses using stochastic value for E0 ####
 # Data is binomial so we might want to draw from a beta distribution
@@ -116,7 +116,7 @@ pred <- predict(emax, E0 = "rbeta(n, shape1=1, shape2=5)")
 
 # Misspecifying the RNG string will return an error
 #pred <- predict(emax, E0 = "rbeta(shape1=1, shape2=5)")
-#### ERROR ####
+### ERROR ###
 
 
 #### Predict responses using meta-analysis of dose = 0 studies ####

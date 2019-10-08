@@ -179,7 +179,7 @@ testthat::test_that("rescale.link functions correctly", {
 #   expect_equal(class(summary(pred)), "data.frame")
 #
 # })
-#
-#
-#
-#
+
+
+
+

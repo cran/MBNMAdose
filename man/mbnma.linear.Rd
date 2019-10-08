@@ -76,7 +76,7 @@ specific wrapper functions}
 \value{
 An object of S3 \code{class(c("mbnma", "rjags"))} containing parameter
 results from the model. Can be summarized by \code{print()} and can check
-traceplots using \code{R2jags::traceplot()}.
+traceplots using \code{R2jags::traceplot()} or various functions from the package \code{mcmcplots}.
 
 Nodes that are automatically monitored (if present in the model) have the
 following interpretation. These will have an additional suffix that relates
@@ -180,7 +180,7 @@ mcmcplots::denplot(linear)
 # Traceplots
 mcmcplots::traplot(linear)
 
-# Autocorrelation plots
+# Caterpillar plots
 mcmcplots::caterplot(linear, "d.slope")
 
 

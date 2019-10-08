@@ -14,7 +14,7 @@ net.noplac <- mbnma.network(noplac.df)
 netlist <- list(network, net.noplac)
 
 
-# # Models
+# Models
 # linear <- mbnma.run(mbnma.network(alog_pcfb), fun="linear", n.iter=1000)
 #
 # emax <- mbnma.emax(netgout, emax="rel", ed50="rel", method="random", n.iter=1000)
@@ -195,17 +195,17 @@ test_that("plot.mbnma.network functions correctly", {
 #
 #
 # testthat::test_that("devplot functions correctly", {
-#   expect_message(devplot(emax, dev.type="resdev", plot.type = "scatter"))
+#   expect_message(devplot(emax, dev.type="resdev", plot.type = "scatter", n.iter=100))
 #
-#   expect_message(devplot(emax.class, dev.type="resdev", plot.type = "box"))
+#   expect_message(devplot(emax.class, dev.type="resdev", plot.type = "box", n.iter=100))
 #
-#   expect_message(devplot(emax.noplac, dev.type="resdev", plot.type = "box"))
+#   expect_message(devplot(emax.noplac, dev.type="resdev", plot.type = "box", n.iter=100))
 #
-#   expect_message(devplot(emax.noplac, dev.type="resdev", facet = FALSE))
+#   expect_message(devplot(emax.noplac, dev.type="resdev", facet = FALSE, n.iter=100))
 #
-#   expect_silent(devplot(resdev, dev.type="resdev"))
+#   expect_silent(devplot(resdev, dev.type="resdev", n.iter=100))
 #
-#   expect_error(devplot(emax, dev.type="dev"))
+#   expect_error(devplot(emax, dev.type="dev", n.iter=100))
 #
 # })
 #
@@ -213,12 +213,12 @@ test_that("plot.mbnma.network functions correctly", {
 #
 # testthat::test_that("fitplot functions correctly", {
 #
-#   expect_message(fitplot(emax, disp.obs = TRUE))
+#   expect_message(fitplot(emax, disp.obs = TRUE, n.iter=100))
 #
-#   expect_message(fitplot(emax.class, disp.obs=FALSE))
+#   expect_message(fitplot(emax.class, disp.obs=FALSE, n.iter=100))
 #
 #   theta.run <- mbnma.run(network, fun="linear", parameters.to.save = "theta", n.iter=1000)
-#   expect_silent(fitplot(theta.run))
+#   expect_silent(fitplot(theta.run, n.iter=100))
 #
 # })
 #

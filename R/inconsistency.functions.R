@@ -14,7 +14,8 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 #' @param drop.discon A boolean object that indicates whether to drop treatments
 #' that are disconnected at the treatment level. Default is `TRUE`. If set to `FALSE` then
 #' this could lead to identification of nodesplit comparisons that are not connected
-#' to the network reference treatment.
+#' to the network reference treatment, or lead to errors in running the nodesplit models, though it
+#' can be useful for error checking.
 #' @param comparisons A matrix specifying the comparisons to be split (one row per comparison).
 #' The matrix must have two columns indicating each treatment for each comparison. Values can
 #' either be character (corresponding to the treatment names given in `network`) or
@@ -23,12 +24,12 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 #' @inheritParams mbnma.run
 #'
 #' @examples
+#' \donttest{
 #' # Using the triptans data
 #' network <- mbnma.network(HF2PPITT)
 #'
-#' \donttest{
-#'   split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
-#'              method="common")
+#' split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
+#'   method="common")
 #'
 #'
 #'
@@ -38,21 +39,13 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 #' loops <- inconsistency.loops(network$data.ab)
 #'
 #' # This...
-#' split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
-#'              method="random", comparisons=rbind(c("eletriptan_0.5", "sumatriptan_0.5")))
+#' single.split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
+#'              method="random", comparisons=rbind(c("sumatriptan_1", "almotriptan_1")))
 #'
 #' #...is the same as...
-#' split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
-#'              method="random", comparisons=rbind(c(2, 5)))
+#' single.split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
+#'              method="random", comparisons=rbind(c(6, 12)))
 #'
-#'
-#' # Drop treatments that are disconnected from the network in the analysis
-#' # Generate data without placebo
-#' noplac.df <- network$data.ab[network$data.ab$narm>2 & network$data.ab$agent!=1,]
-#' net.noplac <- mbnma.network(noplac.df)
-#'
-#' split <- nma.nodesplit(net.noplac, likelihood = "binomial", link="logit",
-#'              method="random", drop.discon=TRUE)
 #'
 #' # Plot results
 #' plot(split, plot.type="density") # Plot density plots of posterior densities
@@ -64,7 +57,7 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 #' }
 #' @export
 nma.nodesplit <- function(network, likelihood=NULL, link=NULL, method="common",
-                            drop.discon=FALSE, comparisons=NULL,
+                            comparisons=NULL, drop.discon=TRUE,
                             ...) {
 
   # Run checks
@@ -86,15 +79,22 @@ nma.nodesplit <- function(network, likelihood=NULL, link=NULL, method="common",
     connect <- drop.disconnected(network)
     data.ab <- connect[["data.ab"]]
     trt.labs <- connect[["trt.labs"]]
+
+    agents <- unique(sapply(trt.labs, function(x) strsplit(x, "_")[[1]][1]))
+    data.ab$agent <- factor(data.ab$agent, labels = agents)
   } else if (drop.discon==FALSE) {
     data.ab <- network$data.ab
     trt.labs <- network$treatments
+    data.ab$agent <- factor(data.ab$agent, labels = network$agents)
   }
 
   # Identify closed loops of treatments
   if (is.null(comparisons)) {
     comparisons <- inconsistency.loops(data.ab)
   } else {
+    if (!class(comparisons) %in% c("matrix", "data.frame")) {
+      stop("`comparisons` must be be either a matrix or a data frame of comparisons on which to nodesplit")
+    }
     if (class(comparisons)=="data.frame") {
       if (all(c("t1", "t2") %in% names(comparisons))) {
         comparisons <- data.frame(comparisons$t1, comparisons$t2)
@@ -104,9 +104,13 @@ nma.nodesplit <- function(network, likelihood=NULL, link=NULL, method="common",
     if (ncol(comparisons)!=2) {
       stop("`comparisons` must be a matrix of comparisons on which to split containing exactly two columns")
     }
+    if (is.numeric(comparisons)) {
+      # To ensure numbers correspond to original treatment numbers even if treatments are dropped from the network
+      comparisons <- apply(comparisons, MARGIN=2, FUN=function(x) (network$treatments[x]))
+    }
     if (is.character(comparisons)) {
       if (!all(comparisons %in% trt.labs)) {
-        stop("Treatment names given in `comparisons` do not match those within `network` or match treatments that have been dropped from the network due to being disconnected")
+        stop("Treatment names given in `comparisons` do not match those within `network` or they match treatments that have been dropped from the network due to being disconnected")
       }
       comparisons <- matrix(as.numeric(factor(comparisons, levels=trt.labs)), ncol=2)
     }
@@ -128,7 +132,7 @@ nma.nodesplit <- function(network, likelihood=NULL, link=NULL, method="common",
       for (i in 1:nrow(out)) {
         printout <- paste(printout, paste(out[i,], collapse=" "), sep="\n")
       }
-      stop(cat(paste0("The following `comparisons` are not part of closed loops of treatments informed by direct and indirect evidence from independent sources:\n",
+      stop(cat(paste0("\nThe following `comparisons` are not part of closed loops of treatments informed by direct and indirect evidence from independent sources:\n",
                       printout, "\n\n")))
     }
   }
@@ -174,7 +178,7 @@ nma.nodesplit <- function(network, likelihood=NULL, link=NULL, method="common",
     ind.df <- ind.df[!(ind.df$studyID %in% dropID),]
 
     # Drop comparisons from studies
-    ind.df <- drop.comp(ind.df, drops=dropcomp, comp=comp)
+    ind.df <- suppressWarnings(drop.comp(ind.df, drops=dropcomp, comp=comp))
     # stoploop <- FALSE
     # while(stoploop==FALSE) {
     #   temp <- drop.comp(ind.df, drops=dropcomp, comp=comp)
@@ -315,11 +319,12 @@ nma.nodesplit <- function(network, likelihood=NULL, link=NULL, method="common",
 #' \insertAllCited{}
 #'
 #' @examples
+#' \donttest{
 #' # Identify comparisons informed by direct and indirect evidence
 #' #in triptans dataset
 #' network <- mbnma.network(HF2PPITT)
-#' \donttest{
 #' inconsistency.loops(network$data.ab)
+#' }
 #'
 #'
 #' # Do not perform additional connectivity check on data
@@ -327,7 +332,6 @@ nma.nodesplit <- function(network, likelihood=NULL, link=NULL, method="common",
 #'             treatment=c(1,2,1,3,2,3,3,4,1,2,4)
 #'             )
 #' inconsistency.loops(data, checkindirect=FALSE)
-#' }
 #' @export
 inconsistency.loops <- function(data, checkindirect=TRUE)
 {
@@ -506,7 +510,7 @@ ref.comparisons <- function(data)
 #' for node-splitting
 #' @param start Can take either `0` or `1` to indicate whether to drop the treatment
 #' in `comp[1]` (`0`) or `comp[2]` (`1`)
-#' @noRd
+#'
 drop.comp <- function(ind.df, drops, comp, start=stats::rbinom(1,1,0.5)) {
   index <- start
   #print(index)

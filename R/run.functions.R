@@ -91,7 +91,7 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 #'
 #' @return An object of S3 `class(c("mbnma", "rjags"))` containing parameter
 #'   results from the model. Can be summarized by `print()` and can check
-#'   traceplots using `R2jags::traceplot()`.
+#'   traceplots using `R2jags::traceplot()` or various functions from the package `mcmcplots`.
 #'
 #'   Nodes that are automatically monitored (if present in the model) have the
 #'   following interpretation. These will have an additional suffix that relates
@@ -244,7 +244,7 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c("."))
 #' # Traceplots
 #' mcmcplots::traplot(result)
 #'
-#' # Autocorrelation plots
+#' # Caterpillar plots
 #' mcmcplots::caterplot(result, "d.1")
 #'
 #'
@@ -596,7 +596,7 @@ gen.parameters.to.save <- function(model.params, model) {
       parameters.to.save <- append(parameters.to.save, paste0("sd.", model.params[i]))
     }
     if (grepl(paste0("\\\nsd\\.beta.", model.params[i]), model)==TRUE) {
-      parameters.to.save <- append(parameters.to.save, paste0("sd\\.beta\\.", model.params[i]))
+      parameters.to.save <- append(parameters.to.save, paste0("sd.beta.", model.params[i]))
     }
     if (grepl(paste0("\\\nD\\.", model.params[i], "(\\[k\\])? ~"), model)==TRUE) {
       parameters.to.save <- append(parameters.to.save, paste0("D.", model.params[i]))
@@ -909,7 +909,7 @@ check.likelink <- function(data.ab, likelihood=NULL, link=NULL) {
 #' # Traceplots
 #' mcmcplots::traplot(linear)
 #'
-#' # Autocorrelation plots
+#' # Caterpillar plots
 #' mcmcplots::caterplot(linear, "d.slope")
 #'
 #'
@@ -1026,7 +1026,7 @@ mbnma.linear <- function(network,
 #' # Traceplots
 #' mcmcplots::traplot(exponential)
 #'
-#' # Autocorrelation plots
+#' # Caterpillar plots
 #' mcmcplots::caterplot(exponential, "d.lambda")
 #'
 #'
@@ -1173,7 +1173,7 @@ mbnma.exponential <- function(network,
 #' # Traceplots
 #' mcmcplots::traplot(emax)
 #'
-#' # Autocorrelation plots
+#' # Caterpillar plots
 #' mcmcplots::caterplot(emax, "d.emax")
 #'
 #'
@@ -1322,7 +1322,7 @@ mbnma.emax <- function(network,
 #' # Traceplots
 #' mcmcplots::traplot(emax.hill)
 #'
-#' # Autocorrelation plots
+#' # Caterpillar plots
 #' mcmcplots::caterplot(emax.hill, "d.emax")
 #'
 #'
@@ -1430,10 +1430,10 @@ mbnma.emax.hill <- function(network,
 #' @inherit mbnma.run references
 #'
 #' @examples
+#' \donttest{
 #' # Using the triptans data
 #' network <- mbnma.network(HF2PPITT)
 #'
-#' \donttest{
 #' # Fit a dose-response MBNMA, monitoring "psi" and "resdev"
 #' result <- mbnma.run(network, fun="exponential", beta.1="rel", method="random",
 #'               parameters.to.save=c("psi", "resdev"))
@@ -1467,10 +1467,10 @@ pDcalc <- function(obs1, obs2, fups=NULL, narm, NS, theta.result, resdev.result,
 
   # Run Checks
   argcheck <- checkmate::makeAssertCollection()
-  checkmate::assertMatrix(obs1, add=argcheck)
-  checkmate::assertMatrix(obs2, add=argcheck)
-  checkmate::assertMatrix(theta.result, add=argcheck)
-  checkmate::assertMatrix(resdev.result, add=argcheck)
+  checkmate::assertArray(obs1, add=argcheck)
+  checkmate::assertArray(obs2, add=argcheck)
+  checkmate::assertArray(theta.result, add=argcheck)
+  checkmate::assertArray(resdev.result, add=argcheck)
   checkmate::assertNumeric(fups, null.ok=TRUE, add=argcheck)
   checkmate::assertNumeric(narm, add=argcheck)
   checkmate::assertNumeric(NS, add=argcheck)
@@ -1549,6 +1549,7 @@ pDcalc <- function(obs1, obs2, fups=NULL, narm, NS, theta.result, resdev.result,
 #'  * `"dev"` for deviance contributions
 #'  * `"resdev"` for residual deviance contributions
 #'  * `"delta"` for within-study relative effects versus the study reference treatment
+#' @inheritParams R2jags::jags
 #'
 #' @return A data frame containing the posterior mean of the updates by arm and study,
 #' with arm and study identifiers.
@@ -1579,15 +1580,13 @@ pDcalc <- function(obs1, obs2, fups=NULL, narm, NS, theta.result, resdev.result,
 #' }
 #'
 #' @export
-mbnma.update <- function(mbnma, param="theta") {
+mbnma.update <- function(mbnma, param="theta",
+                         n.iter=mbnma$BUGSoutput$n.iter, n.thin=mbnma$BUGSoutput$n.thin) {
   # Run checks
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertClass(mbnma, "mbnma", add=argcheck)
   checkmate::assertCharacter(param, len = 1, add=argcheck)
   checkmate::reportAssertions(argcheck)
-
-  n.iter <- mbnma$BUGSoutput$n.iter - mbnma$BUGSoutput$n.burnin
-  n.thin <- mbnma$BUGSoutput$n.thin
 
   modelcode <- mbnma$model.arg$jagscode
   # Ensure param is in model code

@@ -6,7 +6,7 @@
 \title{Node-splitting model for testing consistency at the treatment level}
 \usage{
 nma.nodesplit(network, likelihood = NULL, link = NULL,
-  method = "common", drop.discon = FALSE, comparisons = NULL, ...)
+  method = "common", comparisons = NULL, drop.discon = TRUE, ...)
 
 \method{plot}{nma.nodesplit}(x, plot.type = NULL, ...)
 }
@@ -24,16 +24,17 @@ on the likelihood.}
 \item{method}{Can take either \code{"common"} or \code{"random"} to indicate whether relative effects
 should be modelled with between-study heterogeneity or not (see details).}
 
-\item{drop.discon}{A boolean object that indicates whether to drop treatments
-that are disconnected at the treatment level. Default is \code{TRUE}. If set to \code{FALSE} then
-this could lead to identification of nodesplit comparisons that are not connected
-to the network reference treatment.}
-
 \item{comparisons}{A matrix specifying the comparisons to be split (one row per comparison).
 The matrix must have two columns indicating each treatment for each comparison. Values can
 either be character (corresponding to the treatment names given in \code{network}) or
 numeric (corresponding to treatment codes within the \code{network} - note that these
 may change if \code{drop.discon = TRUE}).}
+
+\item{drop.discon}{A boolean object that indicates whether to drop treatments
+that are disconnected at the treatment level. Default is \code{TRUE}. If set to \code{FALSE} then
+this could lead to identification of nodesplit comparisons that are not connected
+to the network reference treatment, or lead to errors in running the nodesplit models, though it
+can be useful for error checking.}
 
 \item{...}{Arguments to be sent to \code{\link[ggplot2:ggplot]{ggplot2::ggplot()}}}
 
@@ -63,12 +64,12 @@ of posterior densities for direct and indirect evidence.
 }}
 
 \examples{
+\donttest{
 # Using the triptans data
 network <- mbnma.network(HF2PPITT)
 
-\donttest{
-  split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
-             method="common")
+split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
+  method="common")
 
 
 
@@ -78,21 +79,13 @@ network <- mbnma.network(HF2PPITT)
 loops <- inconsistency.loops(network$data.ab)
 
 # This...
-split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
-             method="random", comparisons=rbind(c("eletriptan_0.5", "sumatriptan_0.5")))
+single.split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
+             method="random", comparisons=rbind(c("sumatriptan_1", "almotriptan_1")))
 
 #...is the same as...
-split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
-             method="random", comparisons=rbind(c(2, 5)))
+single.split <- nma.nodesplit(network, likelihood = "binomial", link="logit",
+             method="random", comparisons=rbind(c(6, 12)))
 
-
-# Drop treatments that are disconnected from the network in the analysis
-# Generate data without placebo
-noplac.df <- network$data.ab[network$data.ab$narm>2 & network$data.ab$agent!=1,]
-net.noplac <- mbnma.network(noplac.df)
-
-split <- nma.nodesplit(net.noplac, likelihood = "binomial", link="logit",
-             method="random", drop.discon=TRUE)
 
 # Plot results
 plot(split, plot.type="density") # Plot density plots of posterior densities

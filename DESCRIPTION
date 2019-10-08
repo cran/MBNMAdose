@@ -1,9 +1,9 @@
 Package: MBNMAdose
 Type: Package
 Title: Run Dose-Response MBNMA Models
-Version: 0.2.3
+Version: 0.2.4
 Language: en-GB
-Date: 2019-07-10
+Date: 2019-10-04
 Authors@R: c(person("Hugo", "Pedder", email = "hugopedder@gmail.com", role = c("aut", "cre")),
     person("David", "Mawdsley", role = c("rev")),
     person("Nicky", "Welton", role = c("rev")),
@@ -30,13 +30,14 @@ Imports: grDevices, stats, graphics, utils, scales, dplyr (>= 0.7.4),
 Suggests: overlapping (>= 1.5.0), ggplot2 (>= 2.2.1), igraph (>=
         1.1.2), RColorBrewer (>= 1.1-2), mcmcplots (>= 0.4.3), testthat
         (>= 1.0.2), knitr, rmarkdown
+SystemRequirements: JAGS (>= 4.3.0) (http://mcmc-jags.sourceforge.net)
 Encoding: UTF-8
 LazyData: true
 VignetteBuilder: knitr
 RoxygenNote: 6.1.1
 RdMacros: Rdpack
 NeedsCompilation: no
-Packaged: 2019-07-25 09:14:44 UTC; hp17602
+Packaged: 2019-10-08 13:58:34 UTC; hp17602
 Author: Hugo Pedder [aut, cre],
   David Mawdsley [rev],
   Nicky Welton [rev],
@@ -45,4 +46,4 @@ Author: Hugo Pedder [aut, cre],
   Martin Boucher [rev],
   Adil Karim [ctb]
 Repository: CRAN
-Date/Publication: 2019-07-25 15:20:06 UTC
+Date/Publication: 2019-10-08 14:30:02 UTC

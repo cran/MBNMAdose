@@ -28,10 +28,10 @@ which is an object of \code{class(c("gg", "ggplot"))}.
 Plot histograms of rankings from MBNMA models
 }
 \examples{
+\donttest{
 # Using the triptans data
 network <- mbnma.network(HF2PPITT)
 
-\donttest{
 # Estimate rankings  from an Emax dose-response MBNMA
 emax <- mbnma.emax(network, emax="rel", ed50="rel", method="random")
 ranks <- rank(emax)

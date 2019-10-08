@@ -65,10 +65,10 @@ Alternative approaches are to use pV as an approximation or
 pD calculated by Kullback-Leibler divergence \insertCite{plummer2008}{MBNMAdose}.
 }
 \examples{
+\donttest{
 # Using the triptans data
 network <- mbnma.network(HF2PPITT)
 
-\donttest{
 # Fit a dose-response MBNMA, monitoring "psi" and "resdev"
 result <- mbnma.run(network, fun="exponential", beta.1="rel", method="random",
               parameters.to.save=c("psi", "resdev"))
