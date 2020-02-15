@@ -1,15 +1,16 @@
 Package: MBNMAdose
 Type: Package
 Title: Run Dose-Response MBNMA Models
-Version: 0.2.4
+Version: 0.2.6
 Language: en-GB
-Date: 2019-10-04
+Date: 2020-02-13
 Authors@R: c(person("Hugo", "Pedder", email = "hugopedder@gmail.com", role = c("aut", "cre")),
     person("David", "Mawdsley", role = c("rev")),
     person("Nicky", "Welton", role = c("rev")),
     person("Sofia", "Dias", role = c("rev")),
     person("Meg", "Bennetts", role = c("rev")),
     person("Martin", "Boucher", role = c("rev")),
+    person("Lujin", "Li", role = c("rev")),
     person("Adil", "Karim", role = c("ctb")))
 URL: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4999602/
 Maintainer: Hugo Pedder <hugopedder@gmail.com>
@@ -37,13 +38,14 @@ VignetteBuilder: knitr
 RoxygenNote: 6.1.1
 RdMacros: Rdpack
 NeedsCompilation: no
-Packaged: 2019-10-08 13:58:34 UTC; hp17602
+Packaged: 2020-02-14 22:08:03 UTC; hp17602
 Author: Hugo Pedder [aut, cre],
   David Mawdsley [rev],
   Nicky Welton [rev],
   Sofia Dias [rev],
   Meg Bennetts [rev],
   Martin Boucher [rev],
+  Lujin Li [rev],
   Adil Karim [ctb]
 Repository: CRAN
-Date/Publication: 2019-10-08 14:30:02 UTC
+Date/Publication: 2020-02-15 18:20:02 UTC

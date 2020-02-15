@@ -1,17 +1,19 @@
 ## ----setup, include = FALSE----------------------------------------------
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  fig.width = 7,
-  fig.height = 5,
-  include=TRUE
-)
-
 library(MBNMAdose)
 #devtools::load_all()
 library(rmarkdown)
 library(knitr)
 library(dplyr)
+
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  include=TRUE,
+  tidy.opts=list(width.cutoff=80),
+  tidy=TRUE
+)
 
 ## ---- echo=FALSE---------------------------------------------------------
 kable(head(HF2PPITT), digits=2) 
@@ -69,12 +71,15 @@ mbnma <- mbnma.run(tripnet, fun="emax",
 summary(mbnma)
 
 ## ---- eval=FALSE---------------------------------------------------------
-#  # An alternative would be to use an Emax wrapper for mbnma.run() which would give the same result but with more easily interpretable parameter names
+#  # An alternative would be to use an Emax wrapper for mbnma.run() which would give the
+#  #same result but with more easily interpretable parameter names
 #  mbnma.emax(tripnet, emax="rel", ed50="rel", method="common")
 
-## ------------------------------------------------------------------------
+## ---- results="hide"-----------------------------------------------------
 # Emax model with single parameter estimated for Emax
 emax <- mbnma.emax(tripnet, emax="rel", ed50="common", method="random")
+
+## ------------------------------------------------------------------------
 summary(emax)
 
 ## ---- results="hide", message=FALSE, warning=FALSE-----------------------
@@ -99,11 +104,18 @@ emax <- mbnma.emax(painnet, emax="common", ed50="rel", method="random",
 
 ## ---- eval=FALSE---------------------------------------------------------
 #  # An example specifying a quadratic dose-response function
-#  quad <- "(beta.1 * dose) + (beta.2 * (dose^2))"
+#  quad <- ~ (beta.1 * dose) + (beta.2 * (dose^2))
 #  
-#  mbnma.run(tripnet, fun="user", user.fun=quad,
+#  mbnma.run(alognet, fun="user", user.fun=quad,
 #            beta.1 = "rel", beta.2 = "rel")
-#  
+
+## ---- eval=FALSE---------------------------------------------------------
+#  # Frovatriptan and rizatriptan modelled using an exponential function as only two active
+#  #doses are available for these agents
+#  # All other agents are modelled using an Emax function
+#  multifun <- mbnma.run(painnet, fun=c(rep("emax", 3), "exponential", rep("emax", 2), "exponential", "emax"),
+#              beta.1="rel", beta.2="rel", beta.3="random")
+#  summary(multifun)
 
 ## ------------------------------------------------------------------------
 print(mbnma$model.arg$priors)
@@ -133,8 +145,10 @@ print(mbnma$model.arg$priors)
 
 ## ---- message=FALSE, warning=FALSE---------------------------------------
 # Generate dataset without placebo
-noplac.gout <- GoutSUA_2wkCFB[!GoutSUA_2wkCFB$studyID %in% c(2001, 3102),] # Drop two-arm placebo studies
-noplac.gout <- noplac.gout[noplac.gout$agent!="Plac",] # Drop placebo arm from multi-arm studies
+noplac.gout <- 
+  GoutSUA_2wkCFB[!GoutSUA_2wkCFB$studyID %in% c(2001, 3102),] # Drop two-arm placebo studies
+noplac.gout <- 
+  noplac.gout[noplac.gout$agent!="Plac",] # Drop placebo arm from multi-arm studies
 
 # Create mbnma.network object
 noplac.net <- mbnma.network(noplac.gout)
