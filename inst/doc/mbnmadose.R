@@ -240,13 +240,13 @@ pred <- predict(trip.emax, E0=0.2, n.dose=20)
 plot(pred)
 
 ## ------------------------------------------------------------------------
-plot(pred, disp.obs = TRUE, network=tripnet)
+plot(pred, disp.obs = TRUE)
 
 ## ---- results="hide", warning=FALSE, message=FALSE-----------------------
 alognet <- mbnma.network(alog_pcfb)
 alog.emax <- mbnma.emax(alognet, method="random")
 pred <- predict(alog.emax, E0=0, n.dose=20)
-plot(pred, overlay.split = TRUE, network=alognet, method="random")
+plot(pred, overlay.split = TRUE, method="random")
 
 ## ------------------------------------------------------------------------
 pred <- predict(trip.emax, E0=0.2, n.doses=4,
