@@ -315,7 +315,7 @@ rank.mbnma <- function(x, params=NULL, lower_better=TRUE, level="agent", to.rank
 
   # Cannot rank dmulti() models
   if (length(x$model.arg$fun$name)>1) {
-    stop("Ranking cannot be performed for models with agent-specific dose-response functions\nTry ranking of get.relative() results instead")
+    stop("Ranking cannot be performed for models with agent-specific dose-response functions\nTry ranking of relative effects instead (generated using get.relative())")
   }
 
   # Change agent/class to agents/classes
@@ -434,12 +434,24 @@ rank.mbnma <- function(x, params=NULL, lower_better=TRUE, level="agent", to.rank
         list("summary"=sumrank(rank.mat),
              "prob.matrix"=prob.mat,
              "rank.matrix"=rank.mat,
-             "cum.matrix"=cum.mat,
-             "lower_better"=lower_better)
+             "cum.matrix"=cum.mat)
 
     }
   }
-  class(rank.result) <- "mbnma.rank"
+
+  if (!is.null(x$model.arg$regress.vars)) {
+    regress.vals <- rep(0, length(x$model.arg$regress.vars))
+    names(regress.vals) <- x$model.arg$regress.vars
+  } else {
+    regress.vals <- NULL
+  }
+
+  attributes(rank.result) <- list("class"="mbnma.rank",
+                                  "names"=names(rank.result),
+                                  "lower_better"=lower_better,
+                                  "level"=level,
+                                  "regress.vals"=regress.vals
+                                  )
 
   if (length(rank.result)==0) {
     stop(paste0("There are no parameters saved in the model that vary by ", level))
@@ -492,6 +504,10 @@ rank.mbnma <- function(x, params=NULL, lower_better=TRUE, level="agent", to.rank
 #'   has been provided for it. Using `"random"` rather
 #'   than `"fixed"` for `synth` will result in wider 95\\% CrI for predictions.
 #' @param lim Specifies calculation of either 95% credible intervals (`lim="cred"`) or 95% prediction intervals (`lim="pred"`).
+#' @param regress.vals A named numeric vector of effect modifier values at which results should
+#'   be predicted. Named elements must match variable names specified in `regress.vars` within
+#'   the MBNMA model.
+#'
 #' @param ... Arguments to be sent to [R2jags::jags()] for synthesis of the network
 #'   reference treatment effect (using [ref.synth()])
 #'
@@ -592,6 +608,7 @@ rank.mbnma <- function(x, params=NULL, lower_better=TRUE, level="agent", to.rank
 #' @export
 predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
                           E0=0.2, synth="fixed", lim="cred",
+                          regress.vals=NULL,
                           ...) {
   ######## CHECKS ########
 
@@ -603,10 +620,14 @@ predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
   checkmate::assertInt(n.doses, lower=2, add=argcheck)
   checkmate::assertChoice(synth, choices=c("random", "fixed"), add=argcheck)
   checkmate::assertChoice(lim, choices=c("cred", "pred"), add=argcheck)
+  checkmate::assertNumeric(regress.vals, names = "named", null.ok=TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   agents <- object$model$data()$agent
   mbnma.agents <- object$network[["agents"]]
+
+  # Check regress.vals
+  check.predreg(mbnma=object, regress.vals=regress.vals)
 
   # Checks for doses
   doses <- NULL
@@ -622,6 +643,22 @@ predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
     if (!"Placebo" %in% names(doses) & length(doses)!=length(object$network$agents)) {
       doses <- c("Placebo"=0, doses)
     }
+
+    # Merge list elements if they have the same agent name
+    if (!is.null(names(doses))) {
+      for (i in seq_along(doses)) {
+        if (names(doses)[i] %in% names(doses)[-i]) {
+
+          drop <- which(names(doses) %in% names(doses)[i])[-1]
+
+          for (k in seq_along(drop)) {
+            doses[[i]] <- sort(append(doses[[i]], doses[[drop[k]]]))
+          }
+          doses <- doses[-drop]
+        }
+      }
+    }
+
   } else if (!is.null(max.doses)) {
     doses <- max.doses
 
@@ -653,10 +690,11 @@ predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
         }
         agent.num <- match(names(doses), mbnma.agents)
       } else {
-        if (!all(names(doses) %in% c(1:max(agents, na.rm=TRUE)))) {
-          match.pass <- FALSE
-        }
-        agent.num <- as.numeric(names(doses)) # Add an agent numerical identifier for included agents
+        # if (!all(names(doses) %in% c(1:max(agents, na.rm=TRUE)))) {
+        #   match.pass <- FALSE
+        # }
+        #agent.num <- as.numeric(names(doses)) # Add an agent numerical identifier for included agents
+        agent.num <- 1:length(unique(names(doses)))
       }
       if (match.pass==FALSE) {
         stop("Element names in `doses` must correspond either to agent names in data or agent codes in `object`")
@@ -698,9 +736,9 @@ predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
 
 
   # Set model arguments
-  if (length(object$model.arg$class.effect)>0) {
-    stop("predict() currently does not work with models that use class effects")
-  }
+  # if (length(object$model.arg$class.effect)>0) {
+  #   stop("predict() currently does not work with models that use class effects")
+  # }
   if ("nonparam" %in% object$model.arg$fun$name) {
     stop("predict() does not work with non-parametric dose-response functions")
   }
@@ -738,9 +776,10 @@ predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
   # Get dose-response parameter estimates
   betaparams <- get.model.vals(object)
 
-  # betas <- assignfuns(object$model.arg$fun, object$network$agents, object$model.arg$user.fun,
-  #                     ifelse(is.null(object$model.arg$arg.fun), FALSE, TRUE))
-
+  # Get regression parameter estimates and multiply by regress.vals
+  if (!is.null(regress.vals)) {
+    regress <- get.regress.vals(object, regress.vals, sum=TRUE)
+  }
 
   # Identify E0
   if (is.null(E0)) {
@@ -805,6 +844,8 @@ predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
     }
     for (i in seq_along(index)) {
       if (fun$name[posvec[index[i]]] %in% splineopt) {
+        #print(agent.num[i])
+        #print((object$network$data.ab$dose[object$network$data.ab$agent==agent.num[i]]))
         splinedoses[[i]] <- t(genspline(splinedoses[[i]],
                                    spline = fun$name[posvec[index[i]]],
                                    knots=fun$knots[[posvec[index[i]]]],
@@ -889,6 +930,12 @@ predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
           }
         }
 
+        # Add regression
+        if (!is.null(regress.vals)) {
+          tempDR <- paste0(tempDR, " + reg")
+          reg <- regress[,colnum]
+        }
+
         # Evaluate dose-response string for prediction
         chunk <- eval(parse(text=tempDR))
         if (is.list(chunk)) {
@@ -899,7 +946,7 @@ predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
         if (addsd==TRUE) {
           mat <- matrix(nrow=length(chunk), ncol=2)
           mat[,1] <- chunk
-          mat[,2] <- object$BUGSoutput$sims.list[["sd"]]
+          mat[,2] <- stats::median(object$BUGSoutput$sims.list[["sd"]])
           chunk <- apply(mat, MARGIN=1, FUN=function(x) stats::rnorm(1, x[1], x[2]))
         }
 
@@ -918,7 +965,14 @@ predict.mbnma <- function(object, n.doses=30, exact.doses=NULL,
 
   output <- list("predicts"=predict.result,
                  "likelihood"=object$model.arg$likelihood, "link"=object$model.arg$link,
-                 "network"=object$network, "E0"=E0)
+                 "network"=object$network, "lim"=lim, "E0"=E0)
+
+  # Add 0 values for missing regression values
+  if (is.null(regress.vals) & !is.null(object$model.arg$regress)) {
+    regress.vals <- rep(0, ncol(object$model.arg$regress.mat))
+    names(regress.vals) <- colnames(object$model.arg$regress.mat)
+  }
+  output$regress.vals <- regress.vals
 
   class(output) <- "mbnma.predict"
 
@@ -950,48 +1004,23 @@ summary.mbnma <- function(object, digits=4, ...) {
   rhat.warning(object)
 
   ##### Overall section #####
-
-  # Print title
-  cat(crayon::bold("========================================\nDose-response MBNMA\n========================================\n\n"))
-
-  # Print DR function
-  if (length(object$model.arg$fun$name)==1) {
-    cat(paste("Dose-response function:", object$model.arg$fun$name, sep=" "))
-  } else if (length(object$model.arg$fun$name)>1) {
-    drtab <- matrix(object$model.arg$fun$name[object$model.arg$fun$posvec],
-                    ncol=1)
-
-    paramvec <- sapply(object$model.arg$fun$posvec, FUN = function(x) {
-      paste(names(object$model.arg$fun$paramlist[[x]]), collapse=", ")
-    })
-
-    drtab <- cbind(drtab, paramvec)
-
-    fun.df <- data.frame(Agents=object$network$agents,
-                         Function=drtab[,1],
-                         Parameters=drtab[,2])
-
-    cat("Dose-response functions:")
-    print(knitr::kable(fun.df))
-  }
-
-  if (any(object$model.arg$fun$name == "user")) {
-    cat("\nuser.fun:", unique(object$model.arg$jags[object$model.arg$fun$name %in% "user"]))
-  }
+  overall.str(object)
 
   # Print method section
-  cat(print.method.sect(object))
+  cat(method.str(object))
 
   # Print treatment-level section
-  print.treat.str(object, digits=digits)
+  treat.str(object, digits=digits)
 
   # Class-effect section
-  print.class.str(object, digits=digits)
+  class.str(object, digits=digits)
+
+  # Print regression section
+  regress.str(object, digits=digits)
 
   # Model fit statistics section
-  modfit.sect <- print.modfit.str(object)
+  modfit.sect <- modfit.str(object)
 
-  #output <- paste(overall.sect, treat.sect, method.sect, "\n", class.sect, "\n\n", modfit.sect, sep="")
   output <- paste("\n\n", modfit.sect, sep="")
   cat(output, ...)
 }

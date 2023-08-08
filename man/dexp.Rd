@@ -4,7 +4,7 @@
 \alias{dexp}
 \title{Exponential dose-response function}
 \usage{
-dexp(emax = "rel", onset = NULL)
+dexp(emax = "rel", onset = NULL, p.expon = FALSE)
 }
 \arguments{
 \item{emax}{Pooling for Emax  parameter. Can take \code{"rel"}, \code{"common"}, \code{"random"} or be
@@ -12,6 +12,9 @@ assigned a numeric value (see details).}
 
 \item{onset}{Pooling for onset parameter. Can take \code{"rel"}, \code{"common"}, \code{"random"} or be
 assigned a numeric value (see details).}
+
+\item{p.expon}{A logical object to indicate whether \code{ed50} and \code{hill} parameters should be
+expressed within the dose-response function on an exponential scale}
 }
 \value{
 An object of \code{class("dosefun")}
@@ -26,7 +29,7 @@ the dose-response relationship)
 \eqn{emax\times{(1-exp(-x))}}
 
 2-parameter model:
-\eqn{emax\times{(1-exp(exp(onset)*-x))}}
+\eqn{emax\times{(1-exp(onset*-x))}}
 
 where emax is the maximum efficacy of an agent and rate is the speed
 

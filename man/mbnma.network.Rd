@@ -88,6 +88,8 @@ binomial data or when modelling Standardised Mean Differences
 for poisson data.
 \item \code{class} An optional column indicating a particular class code. Agents with the same identifier
 must also have the same class code.
+\item \code{standsd} An optional column of numeric data indicating reference SDs used to standardise
+treatment effects when modelling using Standardised Mean Differences (SMD).
 }}
 
 \item{description}{Optional. Short description of the network.}
@@ -127,9 +129,9 @@ be included.
 }
 \section{Methods (by generic)}{
 \itemize{
-\item \code{plot}: Generate a network plot
-}}
+\item \code{plot(mbnma.network)}: Generate a network plot
 
+}}
 \examples{
 # Create an mbnma.network object from the data
 network <- mbnma.network(triptans)

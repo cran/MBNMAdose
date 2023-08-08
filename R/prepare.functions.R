@@ -29,6 +29,8 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c(".", "studyID", "agent",
 #' for poisson data.
 #' * `class` An optional column indicating a particular class code. Agents with the same identifier
 #' must also have the same class code.
+#' * `standsd` An optional column of numeric data indicating reference SDs used to standardise
+#' treatment effects when modelling using Standardised Mean Differences (SMD).
 #' @param description Optional. Short description of the network.
 #'
 #' @details Agents/classes for arms that have dose = 0 will be relabelled as `"Placebo"`.
@@ -98,6 +100,7 @@ mbnma.network <- function(data.ab, description="Network") {
 #' * Checks that studies have at least two arms (if `single.arm = FALSE`)
 #' * Checks that each study includes at least two treatments
 #' * Checks that agent names do not include underscores
+#' * Checks that standsd values are consistent within a study
 #'
 #' @return An error if checks are not passed. Runs silently if checks are passed
 mbnma.validate.data <- function(data.ab, single.arm=FALSE) {
@@ -273,6 +276,16 @@ mbnma.validate.data <- function(data.ab, single.arm=FALSE) {
     }
   }
 
+  # Check that standardising SDs are consistent within each study
+  if ("standsd" %in% names(data.ab)) {
+    stansd.df <- data.ab %>% dplyr::select(studyID, standsd) %>%
+      unique(.)
+
+    if (nrow(stansd.df)!=length(unique(stansd.df$studyID))) {
+      stop("Standardising SDs in `data.ab$standsd` must be identical within each study")
+    }
+  }
+
 }
 
 
@@ -358,7 +371,8 @@ add_index <- function(data.ab, agents=NULL, treatments=NULL) {
   newdat <- dplyr::arrange(newdat, dplyr::desc(newdat$narm), newdat$studyID, newdat$arm)
 
   output <- list("data.ab"=newdat,
-                 "studyID"=as.character(unique(newdat$studyID)))
+                 #"studyID"=as.character(unique(newdat$studyID)))
+                 "studyID"=unique(newdat$studyID))
 
   if ("agent" %in% names(data.ab)) {
     output[["agents"]] <- agents
@@ -461,7 +475,7 @@ recode.agent <- function(data.ab, level="agent") {
     message(paste0("Values for `", level, "` with dose = 0 have been recoded to `Placebo`"))
   }
   if (!identical(1:max(data.ab[[level]]), sort(unique(data.ab[[level]]))[-1])) {
-    message(paste0(level, " is being recoded to enforce sequential numbering and allow inclusion of `Placebo`"))
+    message(paste0(level, " is being recoded to enforce sequential numbering"))
   }
 
   # Reorder by number sequentially (meaning that "Placebo" now is 1)
@@ -532,7 +546,8 @@ recode.agent <- function(data.ab, level="agent") {
 #' jagsdat <- getjagsdata(network$data.ab, level="treatment")
 #'
 #' @export
-getjagsdata <- function(data.ab, class=FALSE,
+getjagsdata <- function(data.ab, class=FALSE, sdscale=FALSE,
+                        regress=NULL, regress.effect="common",
                         likelihood=check.likelink(data.ab)$likelihood,
                         link=check.likelink(data.ab)$link,
                         level="agent", fun=NULL, nodesplit=NULL) {
@@ -541,15 +556,24 @@ getjagsdata <- function(data.ab, class=FALSE,
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertDataFrame(data.ab, add=argcheck)
   checkmate::assertLogical(class, len=1, null.ok=FALSE, add=argcheck)
+  checkmate::assertFormula(regress, null.ok=TRUE, add=argcheck)
   checkmate::assertChoice(level, choices=c("agent", "treatment"), null.ok=FALSE, add=argcheck)
   checkmate::assertClass(fun, "dosefun", null.ok=TRUE, add=argcheck)
   checkmate::assertNumeric(nodesplit, len=2, null.ok=TRUE, add=argcheck)
+  checkmate::assertLogical(sdscale, len = 1, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   # Check/assign link and likelihood
   likelink <- check.likelink(data.ab, likelihood=likelihood, link=link)
   likelihood <- likelink[["likelihood"]]
   link <- likelink[["link"]]
+
+  # Check and assign level
+  if (level=="treatment" | any(c("random", "independent") %in% regress.effect)) {
+    incltrt <- TRUE
+  } else {
+    incltrt <- FALSE
+  }
 
   df <- data.ab
 
@@ -558,7 +582,9 @@ getjagsdata <- function(data.ab, class=FALSE,
 
   if (level=="agent") {
     varnames <- append(varnames, c("dose", "agent"))
-  } else if (level=="treatment") {
+  }
+
+  if (incltrt==TRUE) {
     varnames <- append(varnames, c("treatment"))
   }
 
@@ -577,18 +603,27 @@ getjagsdata <- function(data.ab, class=FALSE,
     stop("`likelihood` can be either `binomial`, `poisson`, or `normal`")
   }
   if (link=="smd") {
-    datavars <- append(datavars, "n")
+    if (sdscale==TRUE) {
+      # Use refernce SD for standardising
+      varnames <- append(varnames, "standsd")
+    } else {
+      # Use pooled study-specific SD for standardising
+      datavars <- append(datavars, "n")
+    }
   }
   varnames <- append(varnames, datavars)
 
   # Check required variables are in df
   if (!all(varnames %in% names(df))) {
-    msg <- paste0("Variables are missing from dataset:\n",
+    msg <- paste0("Required variables are missing from dataset:\n",
                   paste(varnames[!(varnames %in% names(df))], collapse="\n"))
     stop(msg)
   }
 
-  df <- dplyr::arrange(df, dplyr::desc(df$narm), df$studyID, df$arm)
+  # sort.df <- dplyr::arrange(df, dplyr::desc(df$narm), df$studyID, df$arm)
+  # if (!identical(df, sort.df)) {
+  #   stop("Data formatting error: data.ab has been rearranged in mbnma.network object")
+  # }
 
   df$studynam <- df$studyID
   df <- transform(df, studyID=as.numeric(factor(studyID, levels=as.character(unique(df$studyID)))))
@@ -654,18 +689,6 @@ getjagsdata <- function(data.ab, class=FALSE,
       } else {
         doses$degree <- unique(fun$degree[fun$name %in% splineopt])
       }
-
-      # TEST
-      # nknot <- max(unlist(lapply(fun$knots, length)), na.rm = TRUE)
-      #
-      # # If this dose not work unhash section below and hash this instead
-      # knotposvec <- fun$knots[fun$posvec]
-      #
-      # temp <- matrix(nrow=nrow(doses), ncol=nknot)
-      # for (r in 1:nrow(temp)) {
-      #   temp[r,1:length(knotposvec[[doses$agent[r]]])] <- knotposvec[[doses$agent[r]]]
-      # }
-      # doses$knots <- temp
 
       # If there are multiple spline knots
       if (length(unique(fun$knots)[!is.na(unique(fun$knots))])>1) {
@@ -757,12 +780,6 @@ getjagsdata <- function(data.ab, class=FALSE,
 
         dosespline$spline <- splinemat
 
-        # dosespline <- doses %>% dplyr::group_by(agent) %>%
-        #   dplyr::mutate(spline=genspline(dose,
-        #                                              spline=unique(splinefun),
-        #                                              knots=unique(knots),
-        #                                              degree=unique(degree)))
-
         matsize <- ncol(dosespline$spline)
       }
 
@@ -776,7 +793,9 @@ getjagsdata <- function(data.ab, class=FALSE,
 
     }
 
-  } else if (level=="treatment") {
+  }
+
+  if (incltrt==TRUE) {
     datalist[["NT"]] <- max(df$treatment)
 
     datalist[["treatment"]] <- matrix(rep(NA, max(as.numeric(df$studyID))*max(df$arm)),
@@ -797,6 +816,10 @@ getjagsdata <- function(data.ab, class=FALSE,
     datalist[["class"]] <- classcode
   }
 
+  if (sdscale==TRUE) {
+    datalist[["pool.sd"]] <- vector()
+  }
+
   # Add empty matrix indicating which data points contribute to direct/indirect in node-split model
   if (!is.null(nodesplit)) {
     datalist[["split.ind"]] <- datalist[["agent"]]
@@ -805,9 +828,15 @@ getjagsdata <- function(data.ab, class=FALSE,
 
   # Add data to datalist elements
   for (i in 1:max(as.numeric(df$studyID))) {
+    datalist[["studyID"]] <- append(datalist[["studyID"]], df$studynam[as.numeric(df$studyID)==i &
+                                                                         df$arm==1])
+
+    if (sdscale==TRUE) {
+      datalist[["pool.sd"]] <- append(datalist[["pool.sd"]], df$standsd[as.numeric(df$studyID)==i &
+                                                                           df$arm==1])
+    }
+
     for (k in 1:max(df$arm[df$studyID==i])) {
-      datalist[["studyID"]] <- append(datalist[["studyID"]], df$studynam[as.numeric(df$studyID)==i &
-                                                       df$arm==k])
       for (m in seq_along(datavars)) {
         datalist[[datavars[m]]][i,k] <- df[[datavars[m]]][as.numeric(df$studyID)==i &
                               df$arm==k]
@@ -825,7 +854,9 @@ getjagsdata <- function(data.ab, class=FALSE,
                                              df$arm==k,
                                            grepl("spline$", colnames(df))]
         }
-      } else if (level=="treatment") {
+      }
+
+      if (incltrt==TRUE) {
         datalist[["treatment"]][i,k] <- max(df$treatment[as.numeric(df$studyID)==i &
                                                    df$arm==k])
       }
@@ -846,12 +877,16 @@ getjagsdata <- function(data.ab, class=FALSE,
   }
 
   # Add maxdose for nonparametric dose-response functions
-  if ("nonparam" %in% fun$name) {
+  if (any(c("nonparam", "itp") %in% fun$name)) {
     data.ab <- data.ab %>% dplyr::group_by(agent) %>%
       dplyr::mutate(maxdose=max(dose, na.rm=TRUE)) %>%
       dplyr::slice_head()
 
-    datalist[["maxdose"]] <- data.ab$maxdose
+    if ("nonparam" %in% fun$name) {
+      datalist[["maxdose"]] <- data.ab$maxdose
+    } else if ("itp" %in% fun$name) {
+      datalist[["maxdose"]] <- max(data.ab$maxdose, na.rm=TRUE)
+    }
   }
 
   if ("spline" %in% names(datalist)) {
@@ -863,6 +898,26 @@ getjagsdata <- function(data.ab, class=FALSE,
     datalist[["f"]] <- matrix(fun$posvec[datalist$agent],
                               nrow=nrow(datalist$agent),
                               ncol=ncol(datalist$agent))
+  }
+
+  # Add meta-regression data
+  if (!is.null(regress)) {
+
+    # Just take 1st row of each study
+    reg.mat <- df %>% dplyr::group_by(studyID) %>%
+      dplyr::slice(1) %>%
+      stats::model.matrix(regress,.) # Create design matrix
+
+    # Drop intercept
+    reg.mat <- reg.mat[,-1, drop=FALSE]
+
+    datalist[["regress.mat"]] <- reg.mat
+    datalist[["nreg"]] <- ncol(reg.mat)
+
+    # vars <- regress.vars
+    # for (i in seq_along(vars)) {
+    #   datalist[[vars[i]]] <- vars.df[[vars[i]]]
+    # }
   }
 
   return(datalist)
@@ -1359,10 +1414,13 @@ check.network <- function(g, reference=1) {
 #' @param degree a positive integer giving the degree of the polynomial from which the spline function is composed
 #'  (e.g. `degree=3` represents a cubic spline).
 #' @param max.dose A number indicating the maximum dose between which to calculate the spline function.
-#' @param knots The number/location of knots. If a single integer is given it indicates the number of knots (they will
+#' @param knots The number/location of internal knots. If a single integer is given it indicates the number of knots (they will
 #'   be equally spaced across the range of doses *for each agent*). If a numeric vector is given it indicates the quantiles of the knots as
 #'   a proportion of the maximum dose in the dataset. For example, if the maximum dose in the dataset
 #'   is 100mg/d, `knots=c(0.1,0.5)` would indicate knots should be fitted at 10mg/d and 50mg/d.
+#' @param boundaries A positive numeric vector of length 2 that represents the doses at which to anchor the B-spline or natural
+#' cubic spline basis matrix. This allows data to extend beyond the boundary knots, or for the basis parameters to not depend on `x`.
+#' The default (`boundaries=NULL`) is the range of `x`.
 #'
 #' @return A spline basis matrix with number of rows equal to `length(x)` and the number of columns equal to the number
 #' of coefficients in the spline.
@@ -1382,7 +1440,7 @@ check.network <- function(g, reference=1) {
 #' genspline(x, spline="ls", knots=3)
 #'
 #' @export
-genspline <- function(x, spline="bs", knots=1, degree=1, max.dose=max(x)){
+genspline <- function(x, spline="bs", knots=1, degree=1, max.dose=max(x), boundaries=NULL){
 
   # Run Checks
   argcheck <- checkmate::makeAssertCollection()
@@ -1443,13 +1501,17 @@ genspline <- function(x, spline="bs", knots=1, degree=1, max.dose=max(x)){
       knots <- stats::quantile(0:max.dose, probs = knots)
     }
 
+    if (is.null(boundaries)) {
+      boundaries <- range(x0)
+    }
+
     # Generate spline basis matrix
     if (spline=="bs") {
-      splinedesign <- splines::bs(x=x0, knots=knots, degree=degree)
+      splinedesign <- splines::bs(x=x0, knots=knots, degree=degree, Boundary.knots = boundaries)
     # } else if (spline=="rcs") {
     #   splinedesign <- Hmisc::rcspline.eval(x0, knots = knots, inclx = TRUE)
     } else if (spline=="ns") {
-      splinedesign <- splines::ns(x=x0, knots=knots)
+      splinedesign <- splines::ns(x=x0, knots=knots, Boundary.knots = boundaries)
 
     } else if (spline=="ls") {
       splinedesign <- lspline::lspline(x=x0, knots=knots, marginal = FALSE)
@@ -1544,4 +1606,96 @@ calcom <- function(data.ab, link, likelihood, buffer=1.2) {
   abs <- abs*buffer
 
   return(list(rel=round(rel, 3), abs=round(abs,3)))
+}
+
+
+
+#' Checks meta-regression variables are specified correctly
+#'
+#' Returns error if variables are not specified correctly
+#'
+#' @noRd
+check.regress <- function(network, regress=NULL) {
+
+  # Run Checks
+  argcheck <- checkmate::makeAssertCollection()
+  checkmate::assertClass(network, "mbnma.network", add=argcheck)
+  checkmate::assertFormula(regress, null.ok=TRUE, add=argcheck)
+  checkmate::reportAssertions(argcheck)
+
+  vars <- all.vars(regress)
+
+  # Check vars doesn't include protected object names
+  protvar <- c("beta", "class")
+  if (any(protvar %in% vars)) {
+    stop(paste0("Cannot use the following protected object names: ",
+                paste(protvar[protvar %in% vars], sep=", ")))
+  }
+
+  # Check all vars are in network
+  if (!all(vars %in% names(network$data.ab))) {
+    stop("Effect modifiers specified in `regress` not present in dataset (network$data.ab)")
+  }
+
+  # Check all vars are consistent within studies
+  check.df <- network$data.ab %>%
+    dplyr::select(studyID, vars) %>%
+    unique(.) %>%
+    dplyr::group_by(studyID) %>%
+    dplyr::mutate(dupl=dplyr::n())
+
+  if (any(check.df$dupl>1)) {
+    stop(paste0("Effect modifiers specified in `regress` vary within the following studies:\n",
+                paste(check.df$studyID[check.df$dupl>1], collapse="\n")))
+  }
+
+  # Add meta-regression data
+  # Just take 1st row of each study
+  reg.mat <- network$data.ab %>% dplyr::group_by(studyID) %>%
+    dplyr::slice(1) %>%
+    stats::model.matrix(regress,.) # Create design matrix
+
+  # Drop intercept
+  reg.mat <- reg.mat[,-1, drop=FALSE]
+
+  return(reg.mat)
+
+  # Check that vars are all numeric
+  # for (i in seq_along(vars)) {
+  #   if (!all(is.numeric(check.df[[vars[i]]]))) {
+  #     stop("All variables specified in `regress.vars` must be numeric: `", paste0(vars[i], "` is not numeric"))
+  #   }
+  # }
+}
+
+
+
+#' Convert normal distribution parameters to corresponding log-normal distribution parameters
+#'
+#' Converts mean and variance of normal distribution to the parameters for a log-normal
+#' distribution with the same mean and variance
+#'
+#' @param m Mean of the normal distribution
+#' @param v Variance of the normal distribution
+#'
+#' @return A vector of length two. The first element is the mean and the second element is the variance
+#' of the log-normal distribution
+#'
+#' @examples
+#'
+#' norm <- rnorm(1000, mean=5, sd=2)
+#' params <- norm2lnorm(5, 2^2)
+#' lnorm <- rlnorm(1000, meanlog=params[1], sdlog=params[2]^0.5)
+#'
+#' # Mean and SD of lnorm is equivalent to mean and sd of norm
+#' mean(lnorm)
+#' sd(lnorm)
+#'
+#' @export
+norm2lnorm <- function(m, v) {
+
+  mean <- log(m) - log((v/(m^2))+1) /2
+  var <- log((v/(m^2)) +1)
+
+  return(c(mean, var))
 }

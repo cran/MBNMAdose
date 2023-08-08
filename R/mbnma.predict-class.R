@@ -135,13 +135,25 @@ rank.mbnma.predict <- function(x, lower_better=TRUE, rank.doses=NULL, ...) {
   }))
   colnames(rank.mat) <- treats
 
+  # Probability matrix
+  prob.mat <- calcprob(rank.mat, treats=treats)
+
+  # Calculate cumulative ranking probabilities
+  cum.mat <- apply(prob.mat, MARGIN=2,
+                   FUN=function(col) {cumsum(col)})
+
   result <- list("summary"=sumrank(rank.mat),
-                 "prob.matrix"=calcprob(rank.mat, treats=treats),
+                 "prob.matrix"=prob.mat,
                  "rank.matrix"=rank.mat,
-                 "lower_better"=lower_better)
+                 "cum.matrix"=cum.mat)
   result <- list("Predictions"=result)
 
-  class(result) <- "mbnma.rank"
+  attributes(result) <- list("class"="mbnma.rank",
+                             "names"=names(result),
+                             "lower_better"=lower_better,
+                             "level"="predictions",
+                             "regress.vals"=x$regress.vals
+  )
 
   return(result)
 
@@ -238,6 +250,12 @@ plot.mbnma.predict <- function(x, disp.obs=FALSE,
   sum.pred <- summary(x)
   sum.df <- sum.pred
 
+  # Overlay.split cannot work with regression
+  if (overlay.split==TRUE & "regress.vals" %in% names(x)) {
+    warning(paste0("MBNMA model incorporates meta-regression to account for effect modifiers,\n",
+    "whilst split NMA results will average across them. This may cause mismatches in results"))
+  }
+
   # Check agent.labs and that the number of labels there are is correct
   if (!is.null(agent.labs)) {
     if ("Placebo" %in% names(x[["predicts"]])) {
@@ -291,22 +309,39 @@ plot.mbnma.predict <- function(x, disp.obs=FALSE,
 
     g <- overlay.split(g=g, network=network, E0=x$E0, method=method,
                        likelihood = x[["likelihood"]],
-                       link = x[["link"]])
+                       link = x[["link"]],
+                       lim = x[["lim"]])
 
   }
 
   # Add overlayed lines and legends
   g <- g +
-    ggplot2::geom_line(ggplot2::aes(y=`2.5%`, linetype="95% Interval")) +
-    ggplot2::geom_line(ggplot2::aes(y=`97.5%`, linetype="95% Interval")) +
-    ggplot2::geom_line(ggplot2::aes(linetype="Posterior Median"))
+    ggplot2::geom_line(ggplot2::aes(linetype="MBNMA"))
 
+  if (disp.obs==TRUE) {
+    g <- g +
+      ggplot2::geom_line(ggplot2::aes(y=`2.5%`, linetype="95% Interval")) +
+      ggplot2::geom_line(ggplot2::aes(y=`97.5%`, linetype="95% Interval"))
+  } else {
+    g <- g +
+      ggplot2::geom_ribbon(ggplot2::aes(ymin=`2.5%`, ymax=`97.5%`, fill="MBNMA"),
+                           alpha=0.2)
+  }
+
+  # Create aesthetics
+  linetypevals <- c("MBNMA"="solid",
+                    "95% Interval"="dashed")
+
+  fillvals <- c("MBNMA"="blue",
+                "95% Interval"="black")
+
+  g <- g +
+    ggplot2::scale_linetype_manual(name="", values=linetypevals) +
+    ggplot2::scale_fill_manual(name="", values=fillvals)
+
+  # Add facets and labels and theme
   g <- g + ggplot2::facet_wrap(~agent, scales=scales) +
-    ggplot2::labs(y="Predicted response", x="Dose")
-
-  g <- g + ggplot2::scale_linetype_manual(name="",
-                                          values=c("Posterior Median"="solid",
-                                                   "95% Interval"="dashed")) +
+    ggplot2::labs(y="Predicted response", x="Dose") +
     theme_mbnma()
 
   return(g)
@@ -371,16 +406,35 @@ print.mbnma.predict <- function(x, ...) {
     named.a <- FALSE
   }
 
-  head <- crayon::bold("=====================\nPredicted doses\n=====================\n")
-  info <- vector()
-  for (i in seq_along(agents)) {
-    doses <- sum.df$dose[sum.df$agent==agents[i]]
-    if (named.a==FALSE) {
-      info <- append(info, paste0(crayon::bold(paste0("Agent ", i, ": ")), paste(doses, collapse=", ")))
-    } else {
-      info <- append(info, paste0(crayon::bold(paste0(agents[i], ": ")), paste(doses, collapse=", ")))
-    }
+  cat(crayon::bold("========================\nSummary of Predictions\n========================"))
+
+  # Add dose range
+  dose.df <- data.frame("agent"=names(x$predicts),
+                        "mindose"=sapply(x$predicts, function(x) {
+                          min(as.numeric(names(x)))
+                        }),
+                        "maxdose"=sapply(x$predicts, function(x) {
+                          max(as.numeric(names(x)))
+                        }),
+                        "ndoses"=sapply(x$predicts, function(x) {
+                          length(names(x))
+                        }))
+
+  rownames(dose.df) <- NULL
+  print(knitr::kable(dose.df, col.names = c("Agent", "Min dose", "Max dose", "N doses"), ...))
+  cat("\n")
+
+  if (x$lim=="pred") {
+    cat("Predictions incorporate estimate of between-study SD\n")
   }
-  out <- c(head, info)
-  cat(paste(out, collapse="\n"), ...)
+
+  # Add regression note
+  if ("regress.vals" %in% names(x)) {
+    cat("\nPredictions made using the following interaction (effect modification) values:")
+    reg.df <- data.frame("efmod"=names(x$regress.vals), "vals"=x$regress.vals)
+    rownames(reg.df) <- NULL
+    print(knitr::kable(reg.df, col.names = c("Effect modifier", "Value"), ...))
+    cat("\n")
+  }
+
 }

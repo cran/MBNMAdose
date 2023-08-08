@@ -13,7 +13,7 @@
 #' \eqn{emax\times{(1-exp(-x))}}
 #'
 #' 2-parameter model:
-#' \eqn{emax\times{(1-exp(exp(onset)*-x))}}
+#' \eqn{emax\times{(1-exp(onset*-x))}}
 #'
 #' where emax is the maximum efficacy of an agent and rate is the speed
 #'
@@ -21,6 +21,7 @@
 #'   assigned a numeric value (see details).
 #' @param onset Pooling for onset parameter. Can take `"rel"`, `"common"`, `"random"` or be
 #'   assigned a numeric value (see details).
+#' @inheritParams demax
 #'
 #' @return An object of `class("dosefun")`
 #'
@@ -47,7 +48,7 @@
 #' dexp(onset="rel")
 #'
 #' @export
-dexp <- function(emax="rel", onset=NULL) {
+dexp <- function(emax="rel", onset=NULL, p.expon=FALSE) {
 
   # Run checks
   params <- list(emax=emax, onset=onset)
@@ -76,18 +77,31 @@ dexp <- function(emax="rel", onset=NULL) {
     jags <- "s.beta.1 * (1 - exp(- dose[i,k]))"
 
   } else {
-    fun <- ~ emax * (1 - exp(exp(onset) * -dose))
-    jags <- "s.beta.1 * (1 - exp(exp(s.beta.2) * - dose[i,k]))"
+    if (p.expon==TRUE) {
+      fun <- ~ emax * (1 - exp(exp(onset) * -dose))
+      jags <- "s.beta.1 * (1 - exp(exp(s.beta.2) * - dose[i,k]))"
+    } else if (p.expon==FALSE) {
+      fun <- ~ emax * (1 - exp(onset * -dose))
+      jags <- "s.beta.1 * (1 - exp(s.beta.2 * - dose[i,k]))"
+    }
   }
 
   for (i in seq_along(params)) {
     jags <- gsub(paste0("s\\.beta\\.", i), paste0("s.beta.",i,"[agent[i,k]]"), jags)
   }
 
-  f <- function(dose, beta.1, beta.2=0) {
-    y <- beta.1 * (1-exp(exp(onset)*-dose))
-    return(y)
+  if (p.expon==TRUE) {
+    f <- function(dose, beta.1, beta.2=0) {
+      y <- beta.1 * (1-exp(exp(onset)*-dose))
+      return(y)
+    }
+  } else if (p.expon==FALSE) {
+    f <- function(dose, beta.1, beta.2=0) {
+      y <- beta.1 * (1-exp(onset*-dose))
+      return(y)
+    }
   }
+
 
 
   # Generate output values
@@ -108,12 +122,141 @@ dexp <- function(emax="rel", onset=NULL) {
     stop("Dose-response functions must include at least one parameter modelled using relative effects ('rel')")
   }
 
-  out <- list(name="exp", fun=fun,
+  out <- list(name="exp", fun=fun, p.expon=p.expon,
               params=paramnames, nparam=nparam, jags=jags,
               apool=apool, bname=bname)
   class(out) <- "dosefun"
 
-  message("'onset' parameters are on exponential scale to ensure they take positive values on the natural scale")
+  if (p.expon==TRUE) {
+    message("'onset' parameters are on exponential scale to ensure they take positive values on the natural scale")
+  }
+
+  return(out)
+}
+
+
+
+
+
+#' Integrated Two-Component Prediction (ITP) function
+#'
+#' Similar parameterisation to the Emax model but with non-asymptotic maximal effect (Emax). Proposed
+#' by proposed by \insertCite{fumanner;textual}{MBNMAdose}
+#'
+#' @param emax Pooling for Emax  parameter. Can take `"rel"`, `"common"`, `"random"` or be
+#'   assigned a numeric value (see details).
+#' @param rate Pooling for Rate parameter. Can take `"rel"`, `"common"`, `"random"` or be
+#'   assigned a numeric value (see details).
+#' @inheritParams demax
+#'
+#' @return An object of `class("dosefun")`
+#'
+#' @details
+#'
+#' Emax represents the maximum response.
+#' Rate represents the rate at which a change in the dose of the drug leads to
+#' a change in the effect
+#'
+#' \deqn{{E_{max}}\times\frac{(1-exp(-{rate}\times{x}))}{(1-exp(-{rate}\times{max(x)}))}}
+#'
+#'
+#' @section Dose-response parameters:
+#'
+#' | \strong{Argument} | \strong{Model specification} |
+#' | ----------------- | ---------------------------- |
+#' | `"rel"` | Implies that \emph{relative} effects should be pooled for this dose-response parameter separately for each agent in the network. |
+#' | `"common"` | Implies that all agents share the same common effect for this dose-response parameter. |
+#' | `"random"` | Implies that all agents share a similar (exchangeable) effect for this dose-response parameter. This approach allows for modelling of variability between agents. |
+#' | `numeric()` | Assigned a numeric value, indicating that this dose-response parameter should not be estimated from the data but should be assigned the numeric value determined by the user. This can be useful for fixing specific dose-response parameters (e.g. Hill parameters in Emax functions) to a single value. |
+#'
+#' When relative effects are modelled on more than one dose-response parameter,
+#' correlation between them is automatically estimated using a vague inverse-Wishart prior.
+#' This prior can be made slightly more informative by specifying the scale matrix `omega`
+#' and by changing the degrees of freedom of the inverse-Wishart prior
+#' using the `priors` argument in `mbnma.run()`.
+#'
+#'
+#' @references
+#'   \insertAllCited
+#'
+#' @examples
+#' # Model a common effect on rate
+#' ditp(emax="rel", rate="common")
+#'
+#' @export
+ditp <- function(emax="rel", rate="rel", p.expon=FALSE) {
+
+  params <- list(emax=emax, rate=rate)
+  for (i in seq_along(params)) {
+    if (!is.null(params[[i]])) {
+      err <- TRUE
+      if (length(params[[i]])==1) {
+        if (any(c("rel", "common", "random") %in% params[[i]])) {
+          err <- FALSE
+        } else if (is.numeric(params[[i]])) {
+          err <- FALSE
+        }
+      }
+      if (err) {
+        stop(paste0(names(params)[i], " must take either 'rel', 'common', 'random' or be assigned a numeric value"))
+      }
+    }
+  }
+
+  # Define dose-response function
+  if (p.expon==TRUE) {
+    fun <- ~ emax * (1 - exp(-exp(rate)*dose)) / (1 - exp(-exp(rate)*max(dose)))
+    jags <- "s.beta.1 * ((1-exp(-exp(s.beta.2)*dose[i,k])) / (1-exp(-exp(s.beta.2)*maxdose)))"
+
+  } else if (p.expon==FALSE) {
+    fun <- ~ emax * (1 - exp(-rate*dose)) / (1 - exp(-rate*max(dose)))
+    jags <- "s.beta.1 * ((1-exp(-s.beta.2*dose[i,k])) / (1-exp(-s.beta.2*maxdose)))"
+  }
+
+  for (i in seq_along(params)) {
+    jags <- gsub(paste0("s\\.beta\\.", i), paste0("s.beta.",i,"[agent[i,k]]"), jags)
+  }
+
+
+  f <- function(dose, beta.1, beta.2) {
+    y <- beta.1 * (1-exp(-beta.2*dose)) / (1-exp(-beta.2*max(dose)))
+    return(y)
+  }
+
+  # if (emax=="rel") {
+  #   #jags <- gsub("beta\\.1", "beta.1[i,k]", jags)
+  # } else if (any(c("common", "random") %in% emax))) {
+  #   jags <- gsub("beta\\.1", "i.beta.1[i,k]", jags)
+  # }
+  # if (rate=="rel") {
+  #   #jags <- gsub("beta\\.2", "beta.2[i,k]", jags)
+  # } else if (any(c("common", "random") %in% rate)) {
+  #   jags <- gsub("beta\\.2", "i.beta.2[i,k]", jags)
+  # }
+
+
+  # Generate output values
+  paramnames <- c("emax", "rate")
+  nparam <- 2
+
+  apool <- c(emax, rate)
+  bname <- paste0("beta.", 1:nparam)
+
+  names(apool) <- paramnames
+  names(bname) <- paramnames
+
+  if (!any("rel" %in% apool)) {
+    stop("Dose-response functions must include at least one parameter modelled using relative effects ('rel')")
+  }
+
+  out <- list(name="itp", fun=fun,
+              params=paramnames, nparam=nparam, jags=jags,
+              apool=apool, bname=bname, p.expon=p.expon)
+  class(out) <- "dosefun"
+
+  if (p.expon==TRUE) {
+    message("'ed50' parameters are on exponential scale to ensure they take positive values on the natural scale")
+  }
 
   return(out)
 }
@@ -198,6 +341,8 @@ dloglin <- function() {
 #'   assigned a numeric value (see details).
 #' @param hill Pooling for Hill parameter. Can take `"rel"`, `"common"`, `"random"` or be
 #'   assigned a numeric value (see details).
+#' @param p.expon A logical object to indicate whether `ed50` and `hill` parameters should be
+#'  expressed within the dose-response function on an exponential scale
 #'
 #' @return An object of `class("dosefun")`
 #'
@@ -208,10 +353,10 @@ dloglin <- function() {
 #' exp(Hill) is the Hill parameter, which allows for a sigmoidal function.
 #'
 #' Without Hill parameter:
-#' \deqn{\frac{E_{max}\times{x}}{e^{ET_{50}}+x}}
+#' \deqn{\frac{E_{max}\times{x}}{ET_{50}+x}}
 #'
 #' With Hill parameter:
-#' \deqn{\frac{E_{max}\times{x^{e^{hill}}}}{e^{ET_{50}\times{e^{hill}}}+x^{e^{hill}}}}
+#' \deqn{\frac{E_{max}\times{x^{hill}}}{ET_{50}\times{hill}}+x^{hill}}
 #'
 #'
 #' @section Dose-response parameters:
@@ -241,7 +386,7 @@ dloglin <- function() {
 #' demax(hill="common")
 #'
 #' @export
-demax <- function(emax="rel", ed50="rel", hill=NULL) {
+demax <- function(emax="rel", ed50="rel", hill=NULL, p.expon=FALSE) {
 
   # Run checks
   params <- list(emax=emax, ed50=ed50, hill=hill)
@@ -263,12 +408,22 @@ demax <- function(emax="rel", ed50="rel", hill=NULL) {
     }
   }
 
-  if (!is.null(hill)) {
-    fun <- ~ (emax * (dose ^ hill)) / ((exp(ed50) ^ hill) + (dose ^ hill))
-    jags <- "(s.beta.1 * (dose[i,k] ^ exp(s.beta.3))) / ((exp(s.beta.2) ^ exp(s.beta.3)) + (dose[i,k] ^ exp(s.beta.3)))"
-  } else if (is.null(hill)) {
-    fun <- ~ (emax * dose) / (exp(ed50) + dose)
-    jags <- "(s.beta.1 * dose[i,k]) / (exp(s.beta.2) + dose[i,k])"
+  if (p.expon==TRUE) {
+    if (!is.null(hill)) {
+      fun <- ~ (emax * (dose ^ hill)) / ((exp(ed50) ^ hill) + (dose ^ hill))
+      jags <- "(s.beta.1 * (dose[i,k] ^ exp(s.beta.3))) / ((exp(s.beta.2) ^ exp(s.beta.3)) + (dose[i,k] ^ exp(s.beta.3)))"
+    } else if (is.null(hill)) {
+      fun <- ~ (emax * dose) / (exp(ed50) + dose)
+      jags <- "(s.beta.1 * dose[i,k]) / (exp(s.beta.2) + dose[i,k])"
+    }
+  } else {
+    if (!is.null(hill)) {
+      fun <- ~ (emax * (dose ^ hill)) / ((ed50 ^ hill) + (dose ^ hill))
+      jags <- "(s.beta.1 * (dose[i,k] ^ s.beta.3)) / ((s.beta.2 ^ s.beta.3) + (dose[i,k] ^ s.beta.3))"
+    } else if (is.null(hill)) {
+      fun <- ~ (emax * dose) / (ed50 + dose)
+      jags <- "(s.beta.1 * dose[i,k]) / (s.beta.2 + dose[i,k])"
+    }
   }
 
   for (i in seq_along(params)) {
@@ -277,7 +432,7 @@ demax <- function(emax="rel", ed50="rel", hill=NULL) {
 
 
   f <- function(dose, beta.1, beta.2, beta.3) {
-    y <- (beta.1 * (dose ^ beta.3) ) / ((exp(beta.2) ^ beta.3) + (dose ^ beta.3))
+    y <- (beta.1 * (dose ^ beta.3) ) / ((beta.2 ^ beta.3) + (dose ^ beta.3))
     return(y)
   }
 
@@ -302,16 +457,19 @@ demax <- function(emax="rel", ed50="rel", hill=NULL) {
     stop("Dose-response functions must include at least one parameter modelled using relative effects ('rel')")
   }
 
-  out <- list(name="emax", fun=fun,
+  out <- list(name="emax", fun=fun, p.expon=p.expon,
               params=paramnames, nparam=nparam, jags=jags,
               apool=apool, bname=bname)
   class(out) <- "dosefun"
 
-  message("'ed50' parameters are on exponential scale to ensure they take positive values on the natural scale")
+  if (p.expon==TRUE) {
+    message("'ed50' parameters are on exponential scale to ensure they take positive values on the natural scale")
 
-  if (!is.null(hill)) {
-    message("'hill' parameters are on exponential scale to ensure they take positive values on the natural scale")
+    if (!is.null(hill)) {
+      message("'hill' parameters are on exponential scale to ensure they take positive values on the natural scale")
+    }
   }
+
   return(out)
 }
 
@@ -455,10 +613,8 @@ dpoly <- function(degree=1, beta.1="rel", beta.2="rel",
 #'   assigned a numeric value (see details).
 #' @param beta.2 Pooling for the 2nd fractional polynomial coefficient. Can take `"rel"`, `"common"`, `"random"` or be
 #'   assigned a numeric value (see details).
-#' @param power.1 Pooling for the 1st fractional polynomial power (\eqn{\gamma_1}). Can take `"common"`, `"random"` or be
-#'   assigned a numeric value (see details).
-#' @param power.2 Pooling for the 2nd fractional polynomial power (\eqn{\gamma_2}). Can take `"common"`, `"random"` or be
-#'   assigned a numeric value (see details).
+#' @param power.1 Value for the 1st fractional polynomial power (\eqn{\gamma_1}). Must take any numeric value in the set `-2, -1, -0.5, 0, 0.5, 1, 2, 3`.
+#' @param power.2 Value for the 2nd fractional polynomial power (\eqn{\gamma_2}). Must take any numeric value in the set `-2, -1, -0.5, 0, 0.5, 1, 2, 3`.
 #'
 #' @return An object of `class("dosefun")`
 #'
@@ -502,16 +658,21 @@ dpoly <- function(degree=1, beta.1="rel", beta.2="rel",
 #' dfpoly(beta.1="rel", power.1=0.5)
 #'
 #' # 2nd order fractional polynomial with relative effects for coefficients
-#' # and a common and random pooling for the 1st and 2nd power respectively
+#' # and a value of -0.5 and 2 for the 1st and 2nd powers respectively
 #' dfpoly(degree=2, beta.1="rel", beta.2="rel",
-#'   power.1="common", power.2="random")
+#'   power.1=-0.5, power.2=2)
 #'
 #' @export
 dfpoly <- function(degree=1, beta.1="rel", beta.2="rel",
-                   power.1="common", power.2="common") {
+                   power.1=0, power.2=0) {
 
   # Run checks
+  argcheck <- checkmate::makeAssertCollection()
   checkmate::assertIntegerish(degree, lower=1, upper = 2, add=argcheck)
+  for (i in 1:2) {
+    checkmate::assertChoice(get(paste0("power.", i)), choices=c(-2,-1,-0.5,0,0.5,1,2,3), add=argcheck)
+  }
+  checkmate::reportAssertions(argcheck)
 
   paramscoef <- list(beta.1=beta.1, beta.2=beta.2)
   paramspower <- list(power.1=power.1, beta.4=power.2)
@@ -1039,6 +1200,12 @@ dmulti <- function(funs=list()) {
       #knots <- append(knots, NA)
     }
 
+    if ("p.expon" %in% names(fun)) {
+      p.expon <- fun[["p.expon"]]
+    } else {
+      p.expon <- FALSE
+    }
+
     for (k in seq_along(fun[["params"]])){
       j <- gsub(fun[["bname"]][k], paste0("betaswap.",length(bname)+1), j)
       bname <- append(bname, paste0("beta.",length(bname)+1))
@@ -1063,26 +1230,9 @@ dmulti <- function(funs=list()) {
   names(apool) <- params
   names(bname) <- params
 
-
-  # Check for consistency of knots - I think this is essential tbh
-  # knots <- sapply(funs, FUN=function(x) {x[["knots"]]})
-  # names(knots) <- seq_along(knots)
-  # knots[sapply(knots, is.null)] <- NULL
-  # if (dplyr::n_distinct(knots)>1) {
-  #   stop("dmulti() can only currently be used with a single type of spline function with consistent knots and degrees")
-  # }
-  # knots <- unlist(knots)
-  #
-  # # Check for consistency of spline functions
-  # check <- c("rcs", "bs", "ls", "ns") %in% name
-  # if (sum(check)>1) {
-  #   stop("dmulti() can only currently be used with a single type of spline function with consistent knots and degrees")
-  # }
-
-  # Add check to mbnma.run that length(fun$name) == length(network$treatments)
-
   out <- list(name=name, params=params, nparam=length(params), jags=jags,
               apool=apool, paramlist=apoollist, bname=bname, posvec=posvec, knots=knots, degree=degree,
+              p.expon=p.expon,
               agents=names(funs))
   class(out) <- "dosefun"
   return(out)

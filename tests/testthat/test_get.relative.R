@@ -74,37 +74,39 @@ test_that(paste("get.relative functions work correctly"), {
 
     test_that(paste("get.relative works correctly for:", datanam), {
 
-      expect_error(get.relative(emax, treatments=list("Placebo"=0, "Badger"=c(5,10))), "are not all in mbnma\\$network\\$agents")
+      expect_error(get.relative(emax, treatments=list("Placebo"=0, "Badger"=c(5,10))), "are not all named agents in")
 
-      temp <- get.relative(emax)
-      expect_equal(anyNA(temp$relarray), FALSE)
+      treatments <- list()
+
+      temp <- get.relative(emax, treatments = treatments)
+      expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
       expect_equal(round(temp$mean[3,1] - temp$mean[2,1], 1), round(temp$mean[3,2], 1))
       expect_error(rank(temp), NA)
 
-      temp <- get.relative(emax2)
-      expect_equal(anyNA(temp$relarray), FALSE)
+      temp <- get.relative(emax2, treatments=treatments)
+      expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
       expect_equal(round(temp$mean[3,1] - temp$mean[2,1], 1), round(temp$mean[3,2], 1))
       expect_error(rank(temp), NA)
 
-      temp <- get.relative(bs)
-      expect_equal(anyNA(temp$relarray), FALSE)
+      temp <- get.relative(bs, treatments=treatments)
+      expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
       expect_equal(round(temp$mean[3,1] - temp$mean[2,1], 1), round(temp$mean[3,2], 1))
       expect_error(rank(temp), NA)
 
-      temp <- get.relative(ns)
-      expect_equal(anyNA(temp$relarray), FALSE)
+      temp <- get.relative(ns, treatments=treatments)
+      expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
       expect_equal(round(temp$mean[3,1] - temp$mean[2,1], 1), round(temp$mean[3,2], 1))
       expect_error(rank(temp), NA)
 
-      temp <- get.relative(multifun1)
-      expect_equal(anyNA(temp$relarray), FALSE)
+      temp <- get.relative(multifun1, treatments=treatments)
+      expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
       if (!grepl("noplac", datanam)) {
         expect_equal(round(temp$mean[3,1] - temp$mean[2,1], 1), round(temp$mean[3,2], 1))
       }
       expect_error(rank(temp), NA)
 
-      temp <- get.relative(multifun2)
-      expect_equal(anyNA(temp$relarray), FALSE)
+      temp <- get.relative(multifun2, treatments=treatments)
+      expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
       if (!grepl("noplac", datanam)) {
         expect_equal(round(temp$mean[3,1] - temp$mean[2,1], 1), round(temp$mean[3,2], 1))
       }
@@ -112,13 +114,13 @@ test_that(paste("get.relative functions work correctly"), {
 
       if (datanam %in% "triptans") {
         temp <- get.relative(ns, treatments=list(Placebo=0, eletriptan=1))
-        expect_equal(anyNA(temp$relarray), FALSE)
+        expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
 
         temp <- get.relative(ns, treatments=list(Placebo=0, zolmitriptan=10))
-        expect_equal(anyNA(temp$relarray), FALSE)
+        expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
 
         temp <- get.relative(multifun2, treatments=list(zolmitriptan=1, eletriptan=1))
-        expect_equal(anyNA(temp$relarray), FALSE)
+        expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
       }
 
       # Check prediction intervals
@@ -134,15 +136,15 @@ test_that(paste("get.relative functions work correctly"), {
 
       if (datanam %in% "osteopain") {
         temp <- get.relative(bs, treatments=list("Celebrex"=c(0,100,250,400,500)))
-        expect_equal(anyNA(temp$relarray), FALSE)
+        expect_equal(anyNA(temp$relarray[2,1,]), FALSE)
       }
 
       # Datasets with logit link
       if (datanam %in% c("triptans", "psoriasis90.noplac", "psoriasis75", "ssri")) {
 
         # Check eform
-        temp <- get.relative(bs, eform=TRUE)
-        expect_equal(all(temp$relarray>0), TRUE)
+        temp <- get.relative(emax, treatments=treatments, eform=TRUE)
+        expect_equal(all(temp$relarray>0, na.rm=TRUE), TRUE)
 
       }
     })

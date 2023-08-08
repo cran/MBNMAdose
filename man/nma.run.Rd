@@ -13,6 +13,7 @@ nma.run(
   likelihood = NULL,
   link = NULL,
   priors = NULL,
+  sdscale = FALSE,
   warn.rhat = TRUE,
   n.iter = 20000,
   drop.discon = TRUE,
@@ -51,7 +52,12 @@ on the likelihood.}
 
 \item{priors}{A named list of parameter values (without indices) and
 replacement prior distribution values given as strings
-\strong{using distributions as specified in JAGS syntax} (see \insertCite{jagsmanual;textual}{MBNMAdose}).}
+\strong{using distributions as specified in JAGS syntax} (see \insertCite{jagsmanual;textual}{MBNMAdose}). Note
+that normal distributions in JAGS are specified as \deqn{N(\mu, prec)}, where \deqn{prec = 1 / {\sigma^2}}.}
+
+\item{sdscale}{Logical object to indicate whether to write a model that specifies a reference SD
+for standardising when modelling using Standardised Mean Differences. Specifying \code{sdscale=TRUE}
+will therefore only modify the model if link function is set to SMD (\code{link="smd"}).}
 
 \item{warn.rhat}{A boolean object to indicate whether to return a warning if Rhat values
 for any monitored parameter are >1.02 (suggestive of non-convergence).}
@@ -87,15 +93,17 @@ make no assumptions regarding dose-response , or to estimate split results for \
 Results can also be compared between consistency (\code{UME=FALSE}) and inconsistency
 (\code{UME=TRUE}) models to test the validity of the consistency assumption at the treatment-level.
 }
-\section{Methods (by generic)}{
+\section{Functions}{
 \itemize{
-\item \code{plot}: Plot outputs from treatment-level NMA models
+\item \code{plot(nma)}: Plot outputs from treatment-level NMA models
 
 Results can be plotted either as a single forest plot, or facetted by agent
 and plotted with increasing dose in order to identify potential dose-response
-relationships.
-}}
+relationships. If Placebo (or any agents with dose=0) is included in the network
+then this will be used as the reference treatment, but if it is not then results
+will be plotted versus the network reference used in the NMA object (\code{x}).
 
+}}
 \examples{
 \donttest{
 # Run random effects NMA on the alogliptin dataset

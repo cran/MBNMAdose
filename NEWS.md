@@ -1,3 +1,22 @@
+# MBNMAdose 0.4.2
+
+## Additions/changes
+- Reference SDs can now be used when modelling using SMDs to avoid using study-specific SDs, which can be problematic.
+- Network Meta-Regression: Effect modifiers can now be incorporated using `regress.vars` argument in `mbnma.run()`. Various sharing assumptions for effects can be specified in `regress.effect`.
+- Predictions can be estimated for class effect models
+- Fractional polynomial powers in `dfpoly()` can only take numeric values from set defined in Jansen 2015.
+- Added `calc.edx()` to allow easy estimation of different ED values (e.g. ED90 = the dose at which 90% of the 
+maximum response (Emax) is reached)
+- `get.relative()` now allows simultaneous comparison of two models in a single league table - can be used to compare MBNMA models with different dose-response functions, or MBNMA and NMA models, or NMA models that assume consistency versus those that use Unrelated Mean Effects.
+- Plots of predictions look prettier
+- Dose-response parameters that were previously modelled on an exponential scale (`ed50`, `hill`, `onset`) are now on the natural scale and are assigned truncated normal default priors
+- Separate prior distributions can be specified for different indices of a parameter - allows for agent-specific prior distributions on dose-response parameters.
+
+## Bug fixes
+- Fixed issue with duplication of studyIDs in `getjagsdata()`
+- Fixed bug with studyID labels in `fitplot()` and `devplot()`
+- Fixed issue and documentation with splines to highlight that knot limits should not be specified
+
 # MBNMAdose 0.4.1
 
 ## Additions/changes

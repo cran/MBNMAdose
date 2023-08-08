@@ -16,6 +16,18 @@
 #'   dose-response. See Details.
 #' @param method Can take either `"common"` or `"random"` to indicate whether relative effects
 #'   should be modelled with between-study heterogeneity or not (see details).
+#' @param regress A formula of effect modifiers (variables that
+#'  interact with the treatment effect) to incorporate using Network Meta-Regression
+#'  (E.g. `~ Population + Age`). All variables in the formula are modelled as interacting
+#'  with the treatment effect (i.e. prognostic variables cannot be included in this way).
+#'  Effects modifiers must be named variables in `network$data.ab` and must be identical
+#'  within a study. Factor and character effect modifiers will be converted to a series of
+#'  named dummy variables.
+#' @param regress.effect Indicates whether effect modification should be assumed to be
+#'  `"common"` (assumed to be equal versus Placebo throughout the network),
+#'  `"random"` (assumed to be exchangeable versus Placebo throughout the network),
+#'  `"agent"` (assumed to be equal versus Placebo within each agent), or
+#'  `"class"` (assumed to be equal versus Placebo within each class).
 #' @param class.effect A list of named strings that determines which dose-response
 #'   parameters to model with a class effect and what that effect should be
 #'   (`"common"` or `"random"`). Element names should match dose-response parameter names.
@@ -31,6 +43,9 @@
 #'   an identity link function, or be assigned the value `"smd"` for modelling Standardised Mean Differences using an
 #'   identity link function. If left as `NULL` the link function will be automatically assigned based
 #'   on the likelihood.
+#' @param sdscale Logical object to indicate whether to write a model that specifies a reference SD
+#'  for standardising when modelling using Standardised Mean Differences. Specifying `sdscale=TRUE`
+#'  will therefore only modify the model if link function is set to SMD (`link="smd"`).
 #' @param cor A boolean object that indicates whether correlation should be modelled
 #' between relative effect dose-response parameters. This is
 #' automatically set to `FALSE` if class effects are modelled or if multiple dose-response
@@ -38,11 +53,12 @@
 #' @param omega A scale matrix for the inverse-Wishart prior for the covariance matrix used
 #' to model the correlation between dose-response parameters (see Details for dose-response functions). `omega` must
 #' be a symmetric positive definite matrix with dimensions equal to the number of dose-response parameters modelled using
-#' relative effects (`"rel"`). If left as `NULL` (the default) a diagonal matrix with elements equal to 1
+#' relative effects (`"rel"`). If left as `NULL` (the default) a diagonal matrix with elements equal to 100
 #' is used.
 #' @param priors A named list of parameter values (without indices) and
 #'   replacement prior distribution values given as strings
-#'   **using distributions as specified in JAGS syntax** (see \insertCite{jagsmanual;textual}{MBNMAdose}).
+#'   **using distributions as specified in JAGS syntax** (see \insertCite{jagsmanual;textual}{MBNMAdose}). Note
+#'   that normal distributions in JAGS are specified as \deqn{N(\mu, prec)}, where \deqn{prec = 1 / {\sigma^2}}.
 #'
 #' @param pd Can take either:
 #'   * `pv` only pV will be reported (as automatically outputted by `R2jags`).
@@ -81,18 +97,6 @@
 #'   (see `mbnma$model.arg$jagsdata`)
 #'
 #' @param ... Arguments to be sent to R2jags.
-#'
-#' @param user.fun **Deprecated from version 0.4.0 onwards.** A formula specifying any relationship including `dose` and
-#'   one/several of: `beta.1`, `beta.2`, `beta.3`, `beta.4`.
-#' @param beta.1 **Deprecated from version 0.4.0 onwards.** Refers to dose-parameter(s) specified within the dose-response function(s).
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details).
-#' @param beta.2 **Deprecated from version 0.4.0 onwards.** Refers to dose-parameter(s) specified within the dose-response function(s).
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details).
-#' @param beta.3 **Deprecated from version 0.4.0 onwards.** Refers to dose-parameter(s) specified within the dose-response function(s).
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details).
-#' @param beta.4 **Deprecated from version 0.4.0 onwards.** Refers to dose-parameter(s) specified within the dose-response function(s).
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details).
-#' @param arg.params **Deprecated from version 0.4.0 onwards.** Assign run and wrapper parameters
 #'
 #' @details When relative effects are modelled on more than one dose-response parameter and
 #' `cor = TRUE`, correlation between the dose-response parameters is automatically
@@ -301,10 +305,13 @@
 #'
 #' @export
 mbnma.run <- function(network,
-                      fun=dloglin(),
+                      fun=dpoly(degree=1),
                       method="common",
+                      regress=NULL,
+                      regress.effect="common",
                       class.effect=list(), UME=FALSE,
-                      cor=TRUE,
+                      sdscale=FALSE,
+                      cor=FALSE,
                       omega=NULL,
                       parameters.to.save=NULL,
                       pd="pd.kl",
@@ -313,10 +320,7 @@ mbnma.run <- function(network,
                       n.iter=20000, n.chains=3,
                       n.burnin=floor(n.iter/2), n.thin=max(1, floor((n.iter - n.burnin) / 1000)),
                       autojags=FALSE, Rhat=1.05, n.update=10,
-                      beta.1="rel",
-                      beta.2="rel", beta.3="rel", beta.4="rel", user.fun=NULL,
-                      model.file=NULL, jagsdata=NULL,
-                      arg.params=NULL, ...
+                      model.file=NULL, jagsdata=NULL, ...
 ) {
 
   # Run checks
@@ -326,18 +330,32 @@ mbnma.run <- function(network,
   checkmate::assertChoice(pd, choices=c("pv", "pd.kl", "plugin", "popt"), null.ok=FALSE, add=argcheck)
   #checkmate::assertLogical(parallel, len=1, null.ok=FALSE, any.missing=FALSE, add=argcheck)
   checkmate::assertLogical(cor, len=1, add=argcheck)
-  checkmate::assertList(arg.params, unique=TRUE, null.ok=TRUE, add=argcheck)
   checkmate::assertList(priors, null.ok=TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
+  args <- as.list(environment())
+
   # Check fun
-  fun <- check.fun(fun=fun, network=network, beta.1=beta.1, beta.2=beta.2, beta.3=beta.3, beta.4=beta.4,
-                   user.fun=user.fun)
+  fun <- check.fun(fun=fun, network=network)
 
   # Check/assign link and likelihood
   likelink <- check.likelink(network$data.ab, likelihood=likelihood, link=link, warnings=TRUE)
   likelihood <- likelink[["likelihood"]]
   link <- likelink[["link"]]
+
+  # Check regression
+  if (!is.null(regress)) {
+    regress.mat <- check.regress(network=network, regress=regress)
+  } else {
+    regress.mat <- NULL
+  }
+
+  # Check sdscale
+  if (sdscale==TRUE) {
+    if (link!="smd") {
+      sdscale <- FALSE
+    }
+  }
 
   # Reduce n.burnin by 1 to avoid JAGS error if n.burnin=n.iter
   if (n.iter==n.burnin) {
@@ -359,7 +377,7 @@ mbnma.run <- function(network,
   if (cor==TRUE & is.null(omega)) {
     relparam <- fun$apool %in% "rel" & !names(fun$apool) %in% names(class.effect)
     if (sum(relparam)>1) {
-      omega <- diag(rep(1,sum(relparam)))
+      omega <- diag(rep(100,sum(relparam)))
     }
   }
 
@@ -384,7 +402,9 @@ mbnma.run <- function(network,
     # Write JAGS model code
     model <- mbnma.write(fun=fun,
                          method=method,
+                         regress.mat=regress.mat, regress.effect=regress.effect,
                          class.effect=class.effect, UME=UME,
+                         sdscale=sdscale,
                          cor=cor, omega=omega,
                          om=calcom(data.ab=network$data.ab, link=link, likelihood=likelihood),
                          likelihood=likelihood, link=link
@@ -392,14 +412,17 @@ mbnma.run <- function(network,
 
     # Change code for if plac not included in network
     if (plac.incl==FALSE) {
-      model <- gsub("for \\(k in 2:Nagent\\)\\{ # Priors on relative treatment effects",
-                    "for (k in 1:Nagent){ # Priors on relative treatment effects",
+      model <- gsub("for \\(k in 2:Nagent\\)\\{ # Priors on relative agent effects",
+                    "for (k in 1:Nagent){ # Priors on relative agent effects",
                     model)
       model <- gsub("for \\(k in 2:Nclass\\)\\{ # Priors on relative class effects",
                     "for (k in 1:Nclass){ # Priors on relative class effects",
                     model)
 
-      model <- gsub("s\\.beta\\.[(0-9)+]\\[1\\] <- 0", "", model)
+      drop <- grep("s\\.beta\\.[(0-9)+]\\[1\\] <- \\.?[0-9]+", model)
+      if (length(drop)>0) {
+        model <- model[-drop]
+      }
     }
 
     # Add user-defined priors to the model
@@ -416,7 +439,7 @@ mbnma.run <- function(network,
   assigned.parameters.to.save <- parameters.to.save
   if (is.null(parameters.to.save)) {
     parameters.to.save <-
-      gen.parameters.to.save(fun=fun, model=model)
+      gen.parameters.to.save(fun=fun, model=model, regress.mat = regress.mat)
   }
 
   # Add nodes to monitor to calculate plugin pd
@@ -432,7 +455,7 @@ mbnma.run <- function(network,
   }
 
   # Set boolean for presence of class effects in model
-  class <- ifelse(length(class.effect)>0, TRUE, FALSE)
+  class <- ifelse(length(class.effect)>0 | "class" %in% regress.effect, TRUE, FALSE)
 
   # Change doses to dose indices for non-parametric models
   if ("nonparam" %in% fun$name) {
@@ -445,7 +468,8 @@ mbnma.run <- function(network,
   #### Run jags model ####
 
   result.jags <- mbnma.jags(data.ab, model,
-                            class=class, omega=omega,
+                            regress=regress, regress.effect=regress.effect,
+                            class=class, omega=omega, sdscale=sdscale,
                             parameters.to.save=parameters.to.save,
                             likelihood=likelihood, link=link, fun=fun,
                             jagsdata=jagsdata,
@@ -467,20 +491,23 @@ mbnma.run <- function(network,
     result$BUGSoutput$DIC <- fitstats$dic
   }
 
-  # Add variables for other key model characteristics (for predict and plot functions)
+  # Define model arguments
   model.arg <- list("parameters.to.save"=assigned.parameters.to.save,
                     "fun"=fun,
                     "jagscode"=result.jags$model,
                     "jagsdata"=jagsdata,
                     "method"=method,
                     "likelihood"=likelihood, "link"=link,
+                    "regress"=regress, "regress.mat"=regress.mat, "regress.effect"=regress.effect,
                     "class.effect"=class.effect,
                     "cor"=cor,
                     "omega"=omega,
                     "UME"=UME,
+                    "sdscale"=sdscale,
                     #"parallel"=parallel,
                     "pd"=pd,
                     "priors"=get.prior(model))
+
   result[["model.arg"]] <- model.arg
   result[["type"]] <- "dose"
   result[["network"]] <- network
@@ -505,7 +532,9 @@ mbnma.run <- function(network,
 
 
 mbnma.jags <- function(data.ab, model,
-                       class=FALSE, omega=NULL,
+                       class=FALSE, sdscale=FALSE,
+                       regress=NULL, regress.effect="common",
+                       omega=NULL,
                        likelihood=NULL, link=NULL, fun=NULL,
                        nodesplit=NULL, jagsdata=NULL,
                        warn.rhat=FALSE, parallel=FALSE,
@@ -524,13 +553,15 @@ mbnma.jags <- function(data.ab, model,
   checkmate::assertNumeric(Rhat, lower=1, add=argcheck)
   checkmate::assertNumeric(n.update, lower=1, add=argcheck)
   checkmate::assertList(jagsdata, null.ok=TRUE, add=argcheck)
+  checkmate::assertLogical(sdscale, len = 1, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
   args <- list(...)
 
   # For MBNMAdose
   if (is.null(jagsdata)) {
-    jagsdata <- getjagsdata(data.ab, class=class,
+    jagsdata <- getjagsdata(data.ab, class=class, sdscale=sdscale,
+                            regress=regress, regress.effect=regress.effect,
                             likelihood=likelihood, link=link, fun=fun,
                             nodesplit=nodesplit)
 
@@ -544,12 +575,6 @@ mbnma.jags <- function(data.ab, model,
       # Generate monotonically increasing/decreasing initial values
       # Check for user-defined initial values
       if (!("inits" %in% names(args))) {
-        # if (grepl("T\\(d\\.1\\[c-1,k\\],\\)", model)) {
-        #   fun="nonparam.up"
-        # } else if (grepl("T\\(,d\\.1\\[c-1,k\\]\\)", model)) {
-        #   fun=="nonparam.down"
-        # }
-
         args$inits <- gen.inits(jagsdata, fun=fun, n.chains=args$n.chains)
       }
     }
@@ -682,8 +707,9 @@ gen.init <- function(jagsdata, fun) {
 #' Automatically generate parameters to save for a dose-response MBNMA model
 #'
 #' @inheritParams mbnma.run
+#' @inheritParams mbnma.write
 #' @param model A JAGS model written as a character object
-gen.parameters.to.save <- function(fun, model) {
+gen.parameters.to.save <- function(fun, model, regress.mat=NULL) {
   # model.params is a vector (numeric/character) of the names of the dose-response parameters in the model
   #e.g. c(1, 2, 3) or c("emax", "et50")
   # model is a JAGS model written as a character object
@@ -692,6 +718,7 @@ gen.parameters.to.save <- function(fun, model) {
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertCharacter(model, min.len = 10, add=argcheck)
   checkmate::assertClass(fun, "dosefun", add=argcheck)
+  checkmate::assertMatrix(regress.mat, null.ok=TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
 
@@ -732,6 +759,17 @@ gen.parameters.to.save <- function(fun, model) {
       parameters.to.save <- parameters.to.save[!parameters.to.save %in% paste0("beta.",i)]
     }
   }
+
+  for (i in seq_along(colnames(regress.mat))) {
+    # Save B
+    parameters.to.save <- append(parameters.to.save, paste0("B.", colnames(regress.mat)[i]))
+
+    # save sd.B
+    if (any(grepl("sd\\.B\\.", model))) {
+      parameters.to.save <- append(parameters.to.save, paste0("sd.B.", colnames(regress.mat)[i]))
+    }
+  }
+
 
   # Include nonparametric
   if ("nonparam" %in% fun$name) {
@@ -786,6 +824,7 @@ gen.parameters.to.save <- function(fun, model) {
 #'
 #' @export
 nma.run <- function(network, method="common", likelihood=NULL, link=NULL, priors=NULL,
+                    sdscale=FALSE,
                     warn.rhat=TRUE, n.iter=20000, drop.discon=TRUE, UME=FALSE, pd="pd.kl",
                     parameters.to.save=NULL, ...) {
 
@@ -809,8 +848,16 @@ nma.run <- function(network, method="common", likelihood=NULL, link=NULL, priors
   likelihood <- likelink[["likelihood"]]
   link <- likelink[["link"]]
 
+  # Check sdscale
+  if (sdscale==TRUE) {
+    if (link!="smd") {
+      sdscale <- FALSE
+    }
+  }
+
   #### Write model for NMA ####
   model <- write.nma(method=method, likelihood=likelihood, link=link, UME=UME,
+                     sdscale=sdscale,
                      om=calcom(data.ab=network$data.ab, link=link, likelihood=likelihood))
 
   #### Add priors ####
@@ -850,7 +897,8 @@ nma.run <- function(network, method="common", likelihood=NULL, link=NULL, priors
     trt.labs <- connect[["trt.labs"]]
   }
 
-  jagsdata <- getjagsdata(data.ab, likelihood = likelihood, link=link, level="treatment")
+  jagsdata <- getjagsdata(data.ab, likelihood = likelihood, link=link, sdscale=sdscale,
+                          level="treatment")
 
 
   #### Run JAGS model ####
@@ -1006,390 +1054,33 @@ check.likelink <- function(data.ab, likelihood=NULL, link=NULL, warnings=FALSE) 
 #' @inheritParams mbnma.network
 #'
 #' @noRd
-check.fun <- function(fun, network, beta.1, beta.2, beta.3, beta.4, user.fun) {
+check.fun <- function(fun, network) {
 
   checkmate::assertClass(network, "mbnma.network")
+  checkmate::assertClass(fun, "dosefun")
 
-  if ("character" %in% class(fun)) {
-    if (length(fun)>1) {
-      stop("'fun' must be an object of class('dosefun') or a list containing objects of class('dosefun')")
+  if (length(fun[["name"]])>1) {
+    if (length(fun[["posvec"]])!=length(network$agents)) {
+      stop("Number of agent-specific dose-response functions in dmulti() must be equal to the number of agents in network$agents")
     }
-    if (fun=="linear") {
-      fun <- dpoly(degree=1, beta.1=beta.1)
-    } else if (fun=="exponential") {
-      fun <- dexp()
-    } else if (fun=="emax") {
-      fun <- demax(emax=beta.1, ed50=beta.2)
-    } else if (fun=="emax.hill") {
-      fun <- demax(emax=beta.1, ed50=beta.2, hill=beta.3)
-    } else if (fun=="user") {
-      fun <- duser(fun=user.str, beta.1=beta.1, beta.2=beta.2, beta.3=beta.3, beta.4=beta.4)
-    } else if (fun=="nonparam.up") {
-      fun <- dnonparam(direction="increasing")
-    } else if (fun=="nonparam.down") {
-      fun <- dnonparam(direction="decreasing")
-    } else if (fun=="user") {
-      fun <- duser(fun=user.fun, beta.1=beta.1, beta.2=beta.2, beta.3=beta.3, beta.4=beta.4)
-    } else {
-      stop("'fun' must be an object of class('dosefun') or a list containing objects of class('dosefun')")
-    }
-  } else if ("dosefun" %in% class(fun)) {
-    if (length(fun[["name"]])>1) {
-      if (length(fun[["posvec"]])!=length(network$agents)) {
-        stop("Number of agent-specific dose-response functions in dmulti() must be equal to the number of agents in network$agents")
+    if (!is.null(fun[["agents"]])) {
+      err <- which(is.na(match(fun$agents, network$agents)))
+      if (length(err)>1) {
+        stop(paste0("Agent names specified in dmulti() are not in network object:\n",
+                    paste(fun$agents[err], collapse="\t")))
       }
-      if (!is.null(fun[["agents"]])) {
-        err <- which(is.na(match(fun$agents, network$agents)))
-        if (length(err)>1) {
-          stop(paste0("Agent names specified in dmulti() are not in network object:\n",
-                      paste(fun$agents[err], collapse="\t")))
-        }
 
-        # Order of agents must be same as in network
-        err <- match(fun$agents, network$agents)
-        if (!all(err==1:length(fun$agents))) {
-          stop("Agent names specified in dmulti() must be ordered the same as agents in network object")
-        }
+      # Order of agents must be same as in network
+      err <- match(fun$agents, network$agents)
+      if (!all(err==1:length(fun$agents))) {
+        stop("Agent names specified in dmulti() must be ordered the same as agents in network object")
       }
     }
-    fun <- fun
-  } else {
-    stop("'fun' has been incorrectly specified")
   }
+
   return(fun)
 }
 
-
-
-
-
-
-
-
-
-
-#######################################################
-#########   mbnma.run Wrapper Functions   #############
-#######################################################
-
-
-#' Run MBNMA model with a linear dose-response function (DEPRECATED)
-#'
-#' FUNCTION IS NOW DEPRECATED - USE `mbnma.run()` DIRECTLY WITH OBJECTS OF `class("dosefun")`
-#'
-#' Fits a Bayesian model-based network meta-analysis (MBNMA) with a defined
-#' dose-response function. Follows the methods
-#' of \insertCite{mawdsley2016;textual}{MBNMAdose}. This function acts as a wrapper for `mbnma.run()` that
-#' uses more clearly defined parameter names.
-#'
-#' @inheritParams mbnma.run
-#' @inherit mbnma.run return references
-#' @param slope Refers to the slope parameter of the linear dose-response function.
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details in `?mbnma.run`).
-#' @param arg.params Assign run and wrapper parameters
-#'
-#' @inheritSection mbnma.run Dose-response parameter arguments
-#'
-#' @references
-#'   \insertAllCited
-#'
-#' @examples
-#' \donttest{
-#' # Using the triptans data
-#' tripnet <- mbnma.network(triptans)
-#'
-#' # Fit a linear dose-response MBNMA with random treatment effects
-#' linear <- mbnma.linear(tripnet, slope="rel", method="random")
-#'
-#' # For further examples see ?mbnma.run
-#' }
-#'
-#' @export
-mbnma.linear <- function(network,
-                         slope="rel",
-                         method="common",
-                         class.effect=list(), UME=FALSE,
-                         cor=TRUE,
-                         omega=NULL,
-                         parameters.to.save=NULL,
-                         pd="pd.kl",
-                         likelihood=NULL, link=NULL,
-                         priors=NULL,
-                         arg.params=NULL, ...)
-{
-
-  # Add warning that this will be deprecated in future versions
-  warning("This syntax for specifying dose-response functions will be removed in future versions.\nPlease use mbnma.run() and specify functions as dosefun objects (e.g. dloglin())`")
-
-  # Assign corresponding run and wrapper parameters
-  arg.params <- list(
-    wrap.params=c("slope"),
-    run.params=c("beta.1")
-  )
-
-  result <- mbnma.run(network=network, parameters.to.save=parameters.to.save,
-                      fun="linear", user.fun=NULL,
-                      model.file=NULL,
-                      beta.1=slope,
-                      method=method,
-                      class.effect=class.effect, UME=UME,
-                      cor=cor, omega=omega,
-                      pd=pd,
-                      likelihood=likelihood, link=link,
-                      priors=priors,
-                      arg.params=arg.params, ...)
-
-  return(result)
-}
-
-
-
-
-
-#' Run MBNMA model with a exponential dose-response function (DEPRECATED)
-#'
-#' FUNCTION IS NOW DEPRECATED - USE `mbnma.run()` DIRECTLY WITH OBJECTS OF `class("dosefun")`
-#'
-#' Fits a Bayesian model-based network meta-analysis (MBNMA) with a defined
-#' dose-response function. Follows the methods
-#' of \insertCite{mawdsley2016;textual}{MBNMAdose}. This function acts as a wrapper for `mbnma.run()` that
-#' uses more clearly defined parameter names.
-#'
-#' @inheritParams mbnma.run
-#' @inheritParams mbnma.linear
-#' @inherit mbnma.run return references
-#' @param lambda Refers to the rate of growth/decay of the exponential dose-response function.
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details in `?mbnma.run`).
-#'
-#' @inheritSection mbnma.run Dose-response parameter arguments
-#'
-#' @references
-#'   \insertAllCited
-#'
-#' @examples
-#' \donttest{
-#' # Using the triptans data
-#' tripnet <- mbnma.network(triptans)
-#'
-#' # Fit a exponential dose-response MBNMA with random treatment effects
-#' exponential <- mbnma.exponential(tripnet, lambda="rel", method="random")
-#'
-#' # For further examples see ?mbnma.run
-#' }
-#'
-#' @export
-mbnma.exponential <- function(network,
-                         lambda="rel",
-                         method="common",
-                         class.effect=list(), UME=FALSE,
-                         cor=TRUE,
-                         omega=NULL,
-                         parameters.to.save=NULL,
-                         pd="pd.kl",
-                         likelihood=NULL, link=NULL,
-                         priors=NULL,
-                         arg.params=NULL, ...)
-{
-
-  # Add warning that this will be deprecated in future versions
-  warning("This syntax for specifying dose-response functions will be removed in future versions.\nPlease use mbnma.run() and specify functions as dosefun objects (e.g. dloglin())`")
-
-  # Assign corresponding run and wrapper parameters
-  arg.params <- list(
-    wrap.params=c("lambda"),
-    run.params=c("beta.1")
-  )
-
-  result <- mbnma.run(network=network, parameters.to.save=parameters.to.save,
-                      fun="exponential", user.fun=NULL,
-                      model.file=NULL,
-                      beta.1=lambda,
-                      method=method,
-                      class.effect=class.effect, UME=UME,
-                      cor=cor, omega=omega,
-                      pd=pd,
-                      likelihood=likelihood, link=link,
-                      priors=priors,
-                      arg.params=arg.params, ...)
-
-  return(result)
-}
-
-
-
-
-
-
-#' Run MBNMA model with an Emax dose-response function (without Hill parameter) (DEPRECATED)
-#'
-#' FUNCTION IS NOW DEPRECATED - USE `mbnma.run()` DIRECTLY WITH OBJECTS OF `class("dosefun")`
-#'
-#' Fits a Bayesian model-based network meta-analysis (MBNMA) with a defined
-#' dose-response function. Follows the methods
-#' of \insertCite{mawdsley2016;textual}{MBNMAdose}. This function acts as a wrapper for `mbnma.run()` that
-#' uses more clearly defined parameter names.
-#'
-#' @inheritParams mbnma.run
-#' @inheritParams mbnma.linear
-#' @inherit mbnma.run return references
-#' @param emax Refers to the Emax parameter of the Emax dose-response function.
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details in `?mbnma.run`).
-#' @param ed50 Refers to the ED50 parameter of the Emax dose-response function.
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details in `?mbnma.run`).
-#'
-#' @inheritSection mbnma.run Dose-response parameter arguments
-#'
-#' @references
-#'   \insertAllCited
-#'
-#' @examples
-#' \donttest{
-#' # Using the triptans data
-#' tripnet <- mbnma.network(triptans)
-#'
-#' # Fit an Emax dose-response MBNMA with random treatment effects on Emax and ED50
-#' emax <- mbnma.emax(tripnet, emax="rel", ed50="rel", method="random")
-#'
-#' # Fit an Emax dose-response MBNMA with common treatment effects on Emax and
-#' #a single common parameter estimated for ED50
-#' emax <- mbnma.emax(tripnet, emax="rel", ed50="common", method="common")
-#'
-#' # For further examples see ?mbnma.run
-#' }
-#'
-#' @export
-mbnma.emax <- function(network,
-                         emax="rel",
-                         ed50="rel",
-                         method="common",
-                         class.effect=list(), UME=FALSE,
-                         cor=TRUE,
-                         omega=NULL,
-                         parameters.to.save=NULL,
-                         pd="pd.kl",
-                         likelihood=NULL, link=NULL,
-                         priors=NULL,
-                         arg.params=NULL, ...)
-{
-
-  # Add warning that this will be deprecated in future versions
-  warning("This syntax for specifying dose-response functions will be removed in future versions.\nPlease use mbnma.run() and specify functions as dosefun objects (e.g. dloglin())`")
-
-  # Assign corresponding run and wrapper parameters
-  arg.params <- list(
-    wrap.params=c("emax", "ed50"),
-    run.params=c("beta.1", "beta.2")
-  )
-
-  result <- mbnma.run(network=network, parameters.to.save=parameters.to.save,
-                      fun="emax", user.fun=NULL,
-                      model.file=NULL,
-                      beta.1=emax,
-                      beta.2=ed50,
-                      method=method,
-                      class.effect=class.effect, UME=UME,
-                      cor=cor, omega=omega,
-                      pd=pd,
-                      likelihood=likelihood, link=link,
-                      priors=priors,
-                      arg.params=arg.params, ...)
-
-  return(result)
-}
-
-
-
-
-
-
-#' Run MBNMA model with an Emax dose-response function (with a Hill parameter) (DEPRECATED)
-#'
-#' FUNCTION IS NOW DEPRECATED - USE `mbnma.run()` DIRECTLY WITH OBJECTS OF `class("dosefun")`
-#'
-#' Fits a Bayesian model-based network meta-analysis (MBNMA) with a defined
-#' dose-response function. Follows the methods
-#' of \insertCite{mawdsley2016;textual}{MBNMAdose}. This function acts as a wrapper for `mbnma.run()` that
-#' uses more clearly defined parameter names.
-#'
-#' @inheritParams mbnma.run
-#' @inheritParams mbnma.linear
-#' @inherit mbnma.run return references
-#' @param emax Refers to the Emax parameter of the Emax dose-response function.
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details in `?mbnma.run`).
-#' @param ed50 Refers to the ED50 parameter of the Emax dose-response function.
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details in `?mbnma.run`).
-#' @param hill Refers to the Hill parameter of the Emax dose-response function.
-#' Can take either `"rel"`, `"common"`, `"random"`, or be assigned a numeric value (see details in `?mbnma.run`).
-#'
-#' @inheritSection mbnma.run Dose-response parameter arguments
-#'
-#' @references
-#'   \insertAllCited
-#'
-#' @examples
-#' \donttest{
-#' # Using the triptans data
-#' tripnet <- mbnma.network(triptans)
-#'
-#' # Fit an Emax (with Hill parameter) dose-response MBNMA with random treatment
-#' #effects on Emax, ED50 and Hill
-#' emax.hill <- mbnma.emax.hill(tripnet, emax="rel", ed50="rel", hill="rel",
-#'                  method="random")
-#'
-#' # Fit an Emax (with Hill parameter) dose-response MBNMA with common treatment
-#' #effects on Emax, a single random parameter estimated for ED50
-#' #and a single common parameter estimated for Hill
-#' emax.hill <- mbnma.emax.hill(tripnet, emax="rel", ed50="random", hill="common",
-#'                  method="common")
-#'
-#' # Assign a specific numerical value for Hill parameter
-#' emax.hill <- mbnma.emax.hill(tripnet, emax="rel", ed50="rel", hill=5)
-#'
-#'
-#' # For further examples see ?mbnma.run
-#' }
-#'
-#' @export
-mbnma.emax.hill <- function(network,
-                       emax="rel",
-                       ed50="rel",
-                       hill="common",
-                       method="common",
-                       class.effect=list(), UME=FALSE,
-                       cor=TRUE,
-                       omega=NULL,
-                       parameters.to.save=NULL,
-                       pd="pd.kl",
-                       likelihood=NULL, link=NULL,
-                       priors=NULL,
-                       arg.params=NULL, ...)
-{
-
-  # Add warning that this will be deprecated in future versions
-  warning("This syntax for specifying dose-response functions will be removed in future versions.\nPlease use mbnma.run() and specify functions as dosefun objects (e.g. dloglin())`")
-
-  # Assign corresponding run and wrapper parameters
-  arg.params <- list(
-    wrap.params=c("emax", "ed50", "hill"),
-    run.params=c("beta.1", "beta.2", "beta.3", "beta.4")
-  )
-
-  result <- mbnma.run(network=network, parameters.to.save=parameters.to.save,
-                      fun="emax.hill", user.fun=NULL,
-                      model.file=NULL,
-                      beta.1=emax,
-                      beta.2=ed50,
-                      beta.3=hill,
-                      method=method,
-                      class.effect=class.effect, UME=UME,
-                      cor=cor, omega=omega,
-                      pd=pd,
-                      likelihood=likelihood, link=link,
-                      priors=priors,
-                      arg.params=arg.params, ...)
-
-  return(result)
-}
 
 
 

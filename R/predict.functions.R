@@ -31,7 +31,7 @@ get.model.vals <- function(mbnma) {
       # Incorporates SD from between-study SD for ABSOLUTE pooling
       mat <- matrix(nrow=mbnma$BUGSoutput$n.sims, ncol=2)
       mat[,1] <- res.mat[[names(fun$apool)[i]]]
-      mat[,2] <- res.mat[[paste0("sd.", names(fun$apool)[i])]]
+      mat[,2] <- stats::median(res.mat[[paste0("sd.", names(fun$apool)[i])]])
       mat <- apply(mat, MARGIN=1, FUN=function(x) stats::rnorm(1, x[1], x[2]))
 
       temp <- as.vector(mat)
@@ -279,4 +279,140 @@ rescale.link <- function(x, direction="link", link="logit") {
     }
   }
   return(x)
+}
+
+
+
+
+
+#' Calculates values for EDx from an Emax model, the dose at which x% of the maximal response (Emax)
+#' is reached
+#'
+#' @inheritParams devplot
+#' @param x A numeric value between 0 and 100 for the dose at which x% of the maximal response (Emax)
+#' should be calculated
+#'
+#' @return A data frame of posterior EDx summary values for each agent
+#'
+#' @export
+calc.edx <- function(mbnma, x=50) {
+
+  # Run checks
+  argcheck <- checkmate::makeAssertCollection()
+  checkmate::assertClass(mbnma, "mbnma", add=argcheck)
+  checkmate::assertNumeric(x, len = 1, lower = 0, upper = 100, add=argcheck)
+  checkmate::reportAssertions(argcheck)
+
+  if (!"emax" %in% mbnma$model.arg$fun$name) {
+    stop("mbnma must be estimated using fun=demax()")
+  }
+
+  if (length(mbnma$model.arg$fun$name)>1) {
+    stop("calc.edx cannot be used for agent-specific MBNMA models")
+  }
+
+  if ("hill" %in% mbnma$model.arg$fun$params) {
+    edx <- mbnma$BUGSoutput$sims.list$ed50 * ((x/(100-x)) ^ (1/mbnma$BUGSoutput$sims.list$hill))
+  } else {
+    edx <- mbnma$BUGSoutput$sims.list$ed50 * (x/(100-x))
+  }
+
+  agents <- mbnma$network$agents[mbnma$network$agents!="Placebo"]
+  output <- data.frame()
+  for (i in seq_along(agents)) {
+    quant <- stats::quantile(edx[,i], probs=c(0.025,0.25,0.5,0.75,0.975), na.rm=TRUE)
+    df <- data.frame("agent"=agents[i],
+                     "mean"=mean(edx[,i]),
+                     "sd"=stats::sd(edx[,i]), stringsAsFactors = TRUE
+    )
+    output <- rbind(output, cbind(df, t(quant)))
+  }
+
+  return(output)
+}
+
+
+
+
+
+#' Get MBNMA model values for regression parameters
+#'
+#' @param sum Logical object to indicate whether resulting covariate and regressor
+#'  values should be summed so that they can be easily added to predictions.
+#' @inheritParams predict.mbnma
+#' @noRd
+get.regress.vals <- function(mbnma, regress.vals, sum=TRUE) {
+
+  # Run checks
+  argcheck <- checkmate::makeAssertCollection()
+  checkmate::assertClass(mbnma, "mbnma", add=argcheck)
+  checkmate::assertNumeric(regress.vals, names="named", add=argcheck)
+  checkmate::reportAssertions(argcheck)
+
+  # Define level
+  if ("agent" %in% mbnma$model.arg$regress.effect) {
+    labs <- mbnma$network$agents[mbnma$network$agents!="Placebo"]
+  } else if ("class" %in% mbnma$model.arg$regress.effect) {
+    labs <- mbnma$network$classes[mbnma$network$classes!="Placebo"]
+  } else {
+    labs <- NULL
+  }
+
+  outlist <- list()
+  outval <- 0
+  for (i in seq_along(regress.vals)) {
+    res.mat <- as.matrix(mbnma$BUGSoutput$sims.list[[paste0("B.", names(regress.vals)[i])]])
+    colnames(res.mat) <- labs
+
+    if ("random" %in% mbnma$model.arg$regress.effect) {
+      sd.reg <- stats::median(mbnma$BUGSoutput$sims.list[[paste0("sd.B.", names(regress.vals)[i])]])
+
+      # Incorporates SD from random covariate-by-treatment interaction
+      mat <- matrix(nrow=mbnma$BUGSoutput$n.sims, ncol=2)
+      mat[,1] <- res.mat
+      mat[,2] <- sd.reg
+      res.mat <- as.matrix(apply(mat, MARGIN=1, FUN=function(x) stats::rnorm(1, x[1], x[2])))
+    }
+
+    # Multiply matrix cols out so that there is one for each agent
+    if ("class" %in% mbnma$model.arg$regress.effect) {
+      classvec <- mbnma$network$classkey$class[mbnma$network$classkey$class!="Placebo"]
+      res.mat <- res.mat[,as.character(classvec)]
+
+    } else if (any(c("common", "random") %in% mbnma$model.arg$regress.effect)) {
+      res.mat <- res.mat[,rep(1, length(mbnma$network$agents[mbnma$network$agents!="Placebo"]))]
+    }
+
+    # Multiply covariate x variable
+    regef <- regress.vals[i] * res.mat
+    outlist[[names(regress.vals)[i]]] <- regef
+    outval <- outval + (regef)
+  }
+
+  if (sum==TRUE) {
+    return(outval)
+  } else if (sum==FALSE) {
+    return(outlist)
+  }
+}
+
+
+
+
+
+
+#' Check regression parameters are specified correctly
+#'
+#' @noRd
+check.predreg <- function(mbnma, regress.vals) {
+
+  # Check regress.vals
+  if (!is.null(regress.vals)) {
+    if (is.null(mbnma$model.arg$regress.mat)) {
+      stop("'regress.vals' has been specified but MBNMA is not a meta-regression model")
+    }
+    if (!setequal(colnames(mbnma$model.arg$regress.mat), names(regress.vals))) {
+      stop(paste0("'regress.vals' must contain a single named regressor value for each covariate specified in the MBNMA model:\n", paste(colnames(mbnma$model.arg$regress.mat), collapse="\n")))
+    }
+  }
 }

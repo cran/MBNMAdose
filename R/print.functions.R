@@ -41,7 +41,7 @@ rhat.warning <- function(mbnma, cutoff=1.2) {
 #'
 #' @inheritParams predict.mbnma
 #' @noRd
-print.treat.str <- function(mbnma, digits=3, ...) {
+treat.str <- function(mbnma, digits=3, ...) {
 
   fun <- mbnma$model.arg$fun
   datasum <- as.data.frame(cbind(mbnma$BUGSoutput$summary[,5],
@@ -57,9 +57,9 @@ print.treat.str <- function(mbnma, digits=3, ...) {
     sect.head <- crayon::bold(paste(headbeta, "dose-response parameter results\n\n", sep=" "))
     cat(crayon::underline(sect.head))
 
-    if (fun$params[i] %in% c("ed50", "hill")) {
-      cat("Parameter modelled on exponential scale to ensure it takes positive values\non the natural scale\n")
-    }
+    # if (fun$params[i] %in% c("ed50", "hill")) {
+    #   cat("Parameter modelled on exponential scale to ensure it takes positive values\non the natural scale\n")
+    # }
 
     agents <- mbnma$network$agents[mbnma$network$agents!="Placebo"]
 
@@ -139,7 +139,7 @@ print.treat.str <- function(mbnma, digits=3, ...) {
 #' Neatly prints a summary of the method used in the model
 #'
 #' @noRd
-print.method.sect <- function(mbnma) {
+method.str <- function(mbnma) {
   # String for method
   data.head <- paste("Parameter", "Median (95%CrI)", sep="\t\t\t\t\t")
   data.head <- paste(crayon::bold(data.head, "-----------------------------------------------------------------------", sep="\n"))
@@ -171,9 +171,9 @@ print.method.sect <- function(mbnma) {
     method <- paste0(method, sd.str)
   }
 
-  method.str <- paste("Method:", method, sep=" ")
-  method.str <- paste(crayon::bold(crayon::underline("\n\nPooling method")), method.str, "\n", sep="\n\n")
-  return(method.str)
+  method.sect <- paste("Method:", method, sep=" ")
+  method.sect <- paste(crayon::bold(crayon::underline("\n\nPooling method")), method.sect, "", sep="\n\n")
+  return(method.sect)
 }
 
 
@@ -184,7 +184,7 @@ print.method.sect <- function(mbnma) {
 
 #' Neatly prints class results
 #' @noRd
-print.class.str <- function(mbnma, digits=4, ...) {
+class.str <- function(mbnma, digits=4, ...) {
 
   if (length(mbnma$model.arg$class.effect)>0) {
 
@@ -242,7 +242,7 @@ print.class.str <- function(mbnma, digits=4, ...) {
 
 #' Neatly prints model fit details
 #' @noRd
-print.modfit.str <- function(mbnma) {
+modfit.str <- function(mbnma) {
   totresdev.str <- c()
 
   cat(crayon::bold(crayon::underline("Model Fit Statistics\n")))
@@ -282,4 +282,120 @@ print.modfit.str <- function(mbnma) {
   dic <- mbnma$BUGSoutput$DIC
   cat(paste("Deviance Information Criterion (DIC) =", round(dic, 1), "\n", sep=" "))
 
+}
+
+
+
+
+#' Neatly prints model regression details
+#' @noRd
+regress.str <- function(mbnma, digits=4, ...) {
+
+  if (!is.null(mbnma$model.arg$regress)) {
+
+    cat(crayon::bold(crayon::underline("Meta-regression\n\n")))
+
+    cat(paste0("Covariates interacting with study-level relative effects: ", paste(crayon::bold(colnames(mbnma$model.arg$regress.mat)), collapse=", "), "\n"))
+
+    # Create summary data frame
+    datasum <- as.data.frame(cbind(mbnma$BUGSoutput$summary[,5],
+                                   mbnma$BUGSoutput$summary[,3],
+                                   mbnma$BUGSoutput$summary[,7]))
+    datasum$param <- rownames(datasum)
+
+    if ("common" %in% mbnma$model.arg$regress.effect) {
+      str <- "Common (identical) covariate-by-treatment effects"
+      labs <- "Common effect"
+      labs.head <- "Regression effect"
+
+    } else if ("random" %in% mbnma$model.arg$regress.effect) {
+      str <- "Random (exchangeable) covariate-by-treatment effects"
+      labs <- "Random effect"
+      labs.head <- "Regression effect"
+
+    } else if ("independent" %in% mbnma$model.arg$regress.effect) {
+      str <- "Independent covariate-by-treatment effects"
+      labs <- mbnma$network$treatments[mbnma$network$treatments!="Placebo_0"]
+      labs.head <- "Treatment"
+
+    } else if ("agent" %in% mbnma$model.arg$regress.effect) {
+      str <- "Common (identical) covariate-by-agent effects"
+      labs <- mbnma$network$agents[mbnma$network$agents!="Placebo"]
+      labs.head <- "Agent"
+
+    } else if ("class" %in% mbnma$model.arg$regress.effect) {
+      str <- "Common (identical) covariate-by-class effects"
+      labs <- mbnma$network$classes[mbnma$network$classes!="Placebo"]
+      labs.head <- "Class"
+
+    }
+    cat(paste0(str, "\n"))
+
+    trt.df <- datasum[grepl("^B\\.", datasum$param),]
+
+    trt.df$labs <- rep(labs, ncol(mbnma$model.arg$regress.mat))
+
+    trt.df <- trt.df[,c(5,4,1,2,3)]
+    rownames(trt.df) <- NULL
+    print(knitr::kable(trt.df, col.names = c(labs.head, "Parameter", "Median", "2.5%", "97.5%"), digits=digits, ...))
+    cat("\n\n")
+
+
+    # Random effects
+    if ("random" %in% mbnma$model.arg$regress.effect) {
+      method <- cat("Standard deviation for random covariate-by-treatment effects")
+
+      trt.df <- datasum[grepl("^sd\\.B\\.", datasum$param),]
+
+      trt.df <- trt.df[,c(4,1,2,3)]
+      rownames(trt.df) <- NULL
+      print(knitr::kable(trt.df, col.names = c("Parameter", "Median", "2.5%", "97.5%"), digits=digits, ...))
+      cat("\n\n")
+    }
+  }
+}
+
+
+
+
+#' Neatly prints heading section
+#' @noRd
+overall.str <- function(mbnma) {
+
+  # Print title
+  cat(crayon::bold("========================================\nDose-response MBNMA\n========================================\n\n"))
+
+  # Print likelihood and link function
+  cat(paste0("Likelihood: ", mbnma$model.arg$likelihood, "\n"))
+
+  if ("smd" %in% mbnma$model.arg$link) {
+    cat("Link function: identity\nTreatment effects synthesised using standardised mean differences\n")
+  } else {
+    cat(paste0("Link function: ", mbnma$model.arg$link, "\n"))
+  }
+
+  # Print DR function
+  if (length(mbnma$model.arg$fun$name)==1) {
+    cat(paste("Dose-response function:", mbnma$model.arg$fun$name, sep=" "))
+  } else if (length(mbnma$model.arg$fun$name)>1) {
+    drtab <- matrix(mbnma$model.arg$fun$name[mbnma$model.arg$fun$posvec],
+                    ncol=1)
+
+    paramvec <- sapply(mbnma$model.arg$fun$posvec, FUN = function(x) {
+      paste(names(mbnma$model.arg$fun$paramlist[[x]]), collapse=", ")
+    })
+
+    drtab <- cbind(drtab, paramvec)
+
+    fun.df <- data.frame(Agents=mbnma$network$agents,
+                         Function=drtab[,1],
+                         Parameters=drtab[,2])
+
+    cat("Dose-response functions:")
+    print(knitr::kable(fun.df))
+  }
+
+  if (any(mbnma$model.arg$fun$name == "user")) {
+    cat("\nuser.fun:", unique(mbnma$model.arg$jags[mbnma$model.arg$fun$name %in% "user"]))
+  }
 }

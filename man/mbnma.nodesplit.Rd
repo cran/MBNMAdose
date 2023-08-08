@@ -7,15 +7,10 @@
 \usage{
 mbnma.nodesplit(
   network,
-  fun = dloglin(),
+  fun = dpoly(degree = 1),
   method = "common",
   comparisons = NULL,
   incldr = TRUE,
-  beta.1 = "rel",
-  beta.2 = "rel",
-  beta.3 = "rel",
-  beta.4 = "rel",
-  user.fun = NULL,
   ...
 )
 
@@ -40,21 +35,6 @@ may change if \code{drop.discon = TRUE}).}
 the dose-response relationship. This can be used when node-splitting in dose-response MBNMA to allow
 for a greater number of potential loops in which to check for consistency.}
 
-\item{beta.1}{\strong{Deprecated from version 0.4.0 onwards.} Refers to dose-parameter(s) specified within the dose-response function(s).
-Can take either \code{"rel"}, \code{"common"}, \code{"random"}, or be assigned a numeric value (see details).}
-
-\item{beta.2}{\strong{Deprecated from version 0.4.0 onwards.} Refers to dose-parameter(s) specified within the dose-response function(s).
-Can take either \code{"rel"}, \code{"common"}, \code{"random"}, or be assigned a numeric value (see details).}
-
-\item{beta.3}{\strong{Deprecated from version 0.4.0 onwards.} Refers to dose-parameter(s) specified within the dose-response function(s).
-Can take either \code{"rel"}, \code{"common"}, \code{"random"}, or be assigned a numeric value (see details).}
-
-\item{beta.4}{\strong{Deprecated from version 0.4.0 onwards.} Refers to dose-parameter(s) specified within the dose-response function(s).
-Can take either \code{"rel"}, \code{"common"}, \code{"random"}, or be assigned a numeric value (see details).}
-
-\item{user.fun}{\strong{Deprecated from version 0.4.0 onwards.} A formula specifying any relationship including \code{dose} and
-one/several of: \code{beta.1}, \code{beta.2}, \code{beta.3}, \code{beta.4}.}
-
 \item{...}{Arguments to be sent to \code{\link[ggplot2:ggplot]{ggplot2::ggplot()}} or \code{forestplot::forestplot()}}
 
 \item{x}{An object of \code{class("nodesplit")}}
@@ -76,11 +56,11 @@ The S3 method \code{plot()} on an \code{nodesplit} object generates either
 forest plots of posterior medians and 95\\\% credible intervals, or density plots
 of posterior densities for direct and indirect evidence.
 }
-\section{Methods (by generic)}{
+\section{Functions}{
 \itemize{
-\item \code{plot}: Plot outputs from treatment-level nodesplit MBNMA models
-}}
+\item \code{plot(nodesplit)}: Plot outputs from treatment-level nodesplit MBNMA models
 
+}}
 \examples{
 \donttest{
 # Using the triptans data

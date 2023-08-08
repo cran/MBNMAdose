@@ -13,7 +13,9 @@ if(getRversion() >= "2.15.1")  utils::globalVariables(c(".", "studyID", "agent",
 #'
 #' Results can be plotted either as a single forest plot, or facetted by agent
 #' and plotted with increasing dose in order to identify potential dose-response
-#' relationships.
+#' relationships. If Placebo (or any agents with dose=0) is included in the network
+#' then this will be used as the reference treatment, but if it is not then results
+#' will be plotted versus the network reference used in the NMA object (`x`).
 #'
 #' @param x An object of `class("nma")`
 #' @param bydose A boolean object indicating whether to plot responses with dose
@@ -59,18 +61,42 @@ plot.nma <- function(x, bydose=TRUE, scales="free_x", ...) {
     split.df <- rbind(row, split.df)
   }
 
+  # Add intercept for all agents
+  agents <- unique(split.df$agent)
+  ref.agent <- "Placebo"
+  ref.trt <- "Placebo_0"
+  ylab.es <- "Effect size on link scale versus Placebo"
+
+  if (!"Placebo" %in% agents) {
+    ref.agent <- split.df$agent[1]
+    ref.trt <- split.df$treatment[1]
+    message(paste0("Placebo not included in dataset - reference treatment for plot is ", ref.trt))
+    ylab.es <- paste0("Effect size on link scale versus ", ref.trt)
+  }
+
   # Plot faceted by agent as dose-response splitplot
   if (bydose==TRUE) {
 
-    # Add intercept for all agents
-    agents <- unique(split.df$agent)
+    # agents <- agents[agents!="Placebo"]
+    # for (i in seq_along(agents)) {
+    #   row <- split.df[split.df$agent=="Placebo",]
+    #   row$agent <- agents[i]
+    #   split.df <- rbind(row, split.df)
+    # }
+    # split.df <- split.df[split.df$agent!="Placebo",]
+
     agents <- agents[agents!="Placebo"]
     for (i in seq_along(agents)) {
-      row <- split.df[split.df$agent=="Placebo",]
+      row <- split.df[split.df$treatment==ref.trt,]
       row$agent <- agents[i]
       split.df <- rbind(row, split.df)
     }
-    split.df <- split.df[split.df$agent!="Placebo",]
+
+    if (ref.agent=="Placebo") {
+      split.df <- split.df[split.df$agent!=ref.agent,]
+    } else {
+      split.df <- split.df[!(split.df$treatment==ref.trt & split.df$agent!=ref.agent),]
+    }
 
     if (intercept!=0) {
       split.df[,1:3] <- split.df[,1:3] + intercept
@@ -82,7 +108,7 @@ plot.nma <- function(x, bydose=TRUE, scales="free_x", ...) {
       ggplot2::geom_errorbar(ggplot2::aes(ymin=`2.5%`, ymax=`97.5%`, width=.05)) +
       ggplot2::facet_wrap(~factor(agent), scales = scales) +
       ggplot2::xlab("Dose") +
-      ggplot2::ylab("Effect size on link scale") +
+      ggplot2::ylab(ylab.es) +
       theme_mbnma()
 
   } else if (bydose==FALSE) {
@@ -93,7 +119,7 @@ plot.nma <- function(x, bydose=TRUE, scales="free_x", ...) {
       ggplot2::geom_point() +
       ggplot2::geom_errorbar(ggplot2::aes(ymin=`2.5%`, ymax=`97.5%`), width=.2) +
       ggplot2::coord_flip() +
-      ggplot2::ylab("Effect size on link scale") +
+      ggplot2::ylab(ylab.es) +
       ggplot2::xlab("Treatment") +
       theme_mbnma()
   }

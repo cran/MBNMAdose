@@ -5,9 +5,12 @@
 \title{Write MBNMA dose-response model JAGS code}
 \usage{
 mbnma.write(
-  fun = dloglin(),
+  fun = dpoly(degree = 1),
   method = "common",
-  cor = TRUE,
+  regress.mat = NULL,
+  regress.effect = "common",
+  sdscale = FALSE,
+  cor = FALSE,
   cor.prior = "wishart",
   omega = NULL,
   om = list(rel = 5, abs = 10),
@@ -24,6 +27,18 @@ dose-response. See Details.}
 \item{method}{Can take either \code{"common"} or \code{"random"} to indicate whether relative effects
 should be modelled with between-study heterogeneity or not (see details).}
 
+\item{regress.mat}{A Nstudy x Ncovariate design matrix of meta-regression covariates}
+
+\item{regress.effect}{Indicates whether effect modification should be assumed to be
+\code{"common"} (assumed to be equal versus Placebo throughout the network),
+\code{"random"} (assumed to be exchangeable versus Placebo throughout the network),
+\code{"agent"} (assumed to be equal versus Placebo within each agent), or
+\code{"class"} (assumed to be equal versus Placebo within each class).}
+
+\item{sdscale}{Logical object to indicate whether to write a model that specifies a reference SD
+for standardising when modelling using Standardised Mean Differences. Specifying \code{sdscale=TRUE}
+will therefore only modify the model if link function is set to SMD (\code{link="smd"}).}
+
 \item{cor}{A boolean object that indicates whether correlation should be modelled
 between relative effect dose-response parameters. This is
 automatically set to \code{FALSE} if class effects are modelled or if multiple dose-response
@@ -35,7 +50,7 @@ between relative effects. Must be kept as \code{"wishart"}}
 \item{omega}{A scale matrix for the inverse-Wishart prior for the covariance matrix used
 to model the correlation between dose-response parameters (see Details for dose-response functions). \code{omega} must
 be a symmetric positive definite matrix with dimensions equal to the number of dose-response parameters modelled using
-relative effects (\code{"rel"}). If left as \code{NULL} (the default) a diagonal matrix with elements equal to 1
+relative effects (\code{"rel"}). If left as \code{NULL} (the default) a diagonal matrix with elements equal to 100
 is used.}
 
 \item{om}{a list with two elements that report the maximum relative (\code{"rel"}) and maximum absolute (\code{"abs"}) efficacies
@@ -83,7 +98,8 @@ model <- mbnma.write(fun=dexp(),
              likelihood="binomial",
              link="logit"
              )
-cat(model)
+names(model) <- NULL
+print(model)
 
 # Write model code for a model with an Emax dose-response function,
 # relative effects modelled on Emax with a random effects model,
@@ -92,7 +108,8 @@ model <- mbnma.write(fun=demax(emax="rel", ed50="common"),
              likelihood="normal",
              link="identity"
              )
-cat(model)
+names(model) <- NULL
+print(model)
 
 # Write model code for a model with an Emax dose-response function,
 # relative effects modelled on Emax and ED50.
@@ -102,7 +119,8 @@ model <- mbnma.write(fun=demax(),
              link="identity",
              class.effect=list("ed50"="common")
              )
-cat(model)
+names(model) <- NULL
+print(model)
 
 # Write model code for a model with an Emax dose-response function,
 # relative effects modelled on Emax and ED50 with a
@@ -113,5 +131,6 @@ model <- mbnma.write(fun=demax(),
              likelihood="normal",
              link="identity",
              )
-cat(model)
+names(model) <- NULL
+print(model)
 }
