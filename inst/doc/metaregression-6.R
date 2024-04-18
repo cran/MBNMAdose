@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
   tidy=TRUE
 )
 
-## ---- reg.prep, results="hide"------------------------------------------------
+## ----reg.prep, results="hide"-------------------------------------------------
 # Using the SSRI dataset
 ssri.reg <- ssri
 
@@ -31,7 +31,7 @@ ssri.reg <- ssri.reg %>%
 # Create network object
 ssrinet <- mbnma.network(ssri.reg)
 
-## ---- results="hide", message=FALSE-------------------------------------------
+## ----results="hide", message=FALSE--------------------------------------------
 # Regress for continuous weeks
 # Separate effect modification for each agent vs Placebo
 ssrimod.a <- mbnma.run(ssrinet, fun=dfpoly(degree=2), 
@@ -40,7 +40,7 @@ ssrimod.a <- mbnma.run(ssrinet, fun=dfpoly(degree=2),
 ## -----------------------------------------------------------------------------
 summary(ssrimod.a)
 
-## ---- results="hide", message=FALSE-------------------------------------------
+## ----results="hide", message=FALSE--------------------------------------------
 # Regress for continuous weeks
 # Random effect modification across all agents vs Placebo
 ssrimod.r <- mbnma.run(ssrinet, fun=dfpoly(degree=2), 
@@ -49,7 +49,7 @@ ssrimod.r <- mbnma.run(ssrinet, fun=dfpoly(degree=2),
 ## -----------------------------------------------------------------------------
 summary(ssrimod.r)
 
-## ---- results="hide", message=FALSE-------------------------------------------
+## ----results="hide", message=FALSE--------------------------------------------
 # Regress for categorical weeks
 # Common effect modification across all agents vs Placebo
 ssrimod.c <- mbnma.run(ssrinet, fun=dfpoly(degree=2), 

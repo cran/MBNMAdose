@@ -15,13 +15,13 @@ knitr::opts_chunk$set(
   tidy=TRUE
 )
 
-## ---- results="hide", warning=FALSE, message=FALSE----------------------------
+## ----results="hide", warning=FALSE, message=FALSE-----------------------------
 # Using the alogliptin dataset
 alognet <- mbnma.network(alog_pcfb)
 nma <- nma.run(alognet, method="random")
 ume <- nma.run(alognet, method="random", UME = TRUE)
 
-## ---- echo=FALSE--------------------------------------------------------------
+## ----echo=FALSE---------------------------------------------------------------
 kable(data.frame(
   "Model"=c("NMA", "UME"),
   "resdev"=c(nma$jagsresult$BUGSoutput$median$totresdev,
@@ -31,11 +31,11 @@ kable(data.frame(
 ), digits=2,
 col.names=c("Model", "Residual Deviance", "Betwen-study SD"))
 
-## ---- results="hide", warning=FALSE, message=FALSE----------------------------
+## ----results="hide", warning=FALSE, message=FALSE-----------------------------
 # Compares residual deviance contributions from NMA and UME models
 devdev(nma, ume, dev.type="resdev")
 
-## ---- results="hide", warning=FALSE, message=FALSE, fig.show = "hide", eval=FALSE----
+## ----results="hide", warning=FALSE, message=FALSE, fig.show = "hide", eval=FALSE----
 #  # Using the psoriasis dataset (>75% improvement in PASI score)
 #  psoriasis$r <- psoriasis$r75
 #  psorinet <- mbnma.network(psoriasis)
@@ -48,10 +48,10 @@ devdev(nma, ume, dev.type="resdev")
 #  #indirect evidence in all but the first 6 comparisons
 #  nodesplit <- mbnma.nodesplit(psorinet, fun=demax(), comparisons=splitcomps[1:6,], method="common")
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  print(nodesplit)
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  # Plot forest plots of direct, indirect and pooled (MBNMA) results for each comparison
 #  plot(nodesplit, plot.type="forest")
 #  

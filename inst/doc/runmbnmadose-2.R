@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
   tidy=TRUE
 )
 
-## ---- results="hide", warning=FALSE-------------------------------------------
+## ----results="hide", warning=FALSE--------------------------------------------
 # Prepare data using the triptans dataset
 tripnet <- mbnma.network(triptans)
 
@@ -22,11 +22,11 @@ tripnet <- mbnma.network(triptans)
 mbnma <- mbnma.run(tripnet, fun=demax(emax="rel", ed50="rel"), 
                    method="random")
 
-## ---- message=FALSE, warning=FALSE--------------------------------------------
+## ----message=FALSE, warning=FALSE---------------------------------------------
 # Print neat summary of output
 summary(mbnma)
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 # Emax model with single parameter estimated for Emax
 emax <- mbnma.run(tripnet, fun=demax(emax="rel", ed50="common"), 
                   method="random")
@@ -34,7 +34,7 @@ emax <- mbnma.run(tripnet, fun=demax(emax="rel", ed50="common"),
 ## -----------------------------------------------------------------------------
 summary(emax)
 
-## ---- results="hide", message=FALSE, warning=FALSE----------------------------
+## ----results="hide", message=FALSE, warning=FALSE-----------------------------
 # Using the osteoarthritis dataset
 pain.df <- osteopain
 
@@ -49,7 +49,7 @@ pain.df$class[pain.df$agent %in% c("Naproxcinod", "Naproxen")] <-
 painnet <- mbnma.network(pain.df)
 splines <- mbnma.run(painnet, fun=dspline(type="bs", knots=2), class.effect = list(beta.1="random"))
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  # Using the depression SSRI dataset
 #  depnet <- mbnma.network(ssri)
 #  
@@ -58,7 +58,7 @@ splines <- mbnma.run(painnet, fun=dspline(type="bs", knots=2), class.effect = li
 #  
 #  quad <- mbnma.run(depnet, fun=duser(fun=quadfun, beta.1 = "rel", beta.2 = "rel"))
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  # Using the depression SSRI dataset
 #  depnet <- mbnma.network(ssri)
 #  
@@ -74,7 +74,7 @@ splines <- mbnma.run(painnet, fun=dspline(type="bs", knots=2), class.effect = li
 #  multifun <- mbnma.run(depnet, fun=dr.funs, method="common", n.iter=50000)
 #  summary(multifun)
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  dspline(type="bs", knots=3)
 #  # ...is equivalent to
 #  dspline(type="bs", knots=c(0.25,0.5,0.75))
@@ -86,7 +86,7 @@ splines <- mbnma.run(painnet, fun=dspline(type="bs", knots=2), class.effect = li
 ## -----------------------------------------------------------------------------
 print(mbnma$model.arg$priors)
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  # Define replacement prior
 #  new.priors <- list(
 #    sd = "dnorm(0, 1) T(0,)"
@@ -96,7 +96,7 @@ print(mbnma$model.arg$priors)
 #  emax <- mbnma.run(alognet, fun=demax(), method="random",
 #                     priors=new.priors)
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  ed50.priors <- list(ed50 = c(
 #    Celebrex="dnorm(100, 0.0025) T(0,)",
 #    Etoricoxib="dnorm(20, 0.01) T(0,)",
@@ -112,7 +112,7 @@ print(mbnma$model.arg$priors)
 #  mbnma <- mbnma.run(painnet, fun=demax(emax="rel", ed50="rel"),
 #                     priors=ed50.priors)
 
-## ---- message=FALSE, warning=FALSE--------------------------------------------
+## ----message=FALSE, warning=FALSE---------------------------------------------
 # Generate dataset without placebo
 noplac.gout <- 
   gout[!gout$studyID %in% c(2001, 3102),] # Drop two-arm placebo studies
@@ -141,21 +141,21 @@ plot(noplac.net, level="agent", remove.loops = TRUE, label.distance = 4,
 plot(noplac.net, level="agent", remove.loops = TRUE, label.distance = 4,
      doselink=3)
 
-## ---- nonparam, results="hide"------------------------------------------------
+## ----nonparam, results="hide"-------------------------------------------------
 nonparam <- mbnma.run(tripnet, fun=dnonparam(direction="increasing"), method="random")
 
 ## -----------------------------------------------------------------------------
 print(nonparam)
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 tripnet <- mbnma.network(triptans)
 trip.emax <- mbnma.run(tripnet, fun=demax(emax="rel", ed50="rel")) 
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 # Plot boxplots of residual deviance contributions (scatterplot is the default)
 devplot(trip.emax, plot.type = "box")
 
-## ---- results="hide", warning=FALSE-------------------------------------------
+## ----results="hide", warning=FALSE--------------------------------------------
 # Plot fitted and observed values with treatment labels
 fitplot(trip.emax)
 

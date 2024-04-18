@@ -15,11 +15,11 @@ knitr::opts_chunk$set(
   tidy=TRUE
 )
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 tripnet <- mbnma.network(triptans)
 trip.emax <- mbnma.run(tripnet, fun=demax(emax="rel", ed50="rel")) 
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  E0 <- triptans[triptans$dose==0,]
 
 ## -----------------------------------------------------------------------------
@@ -41,7 +41,7 @@ E0.data <- triptans[triptans$dose==0,]
 doses <- list("eletriptan"=c(0,1,3),
                   "sumatriptan"=c(0,3))
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 pred <- predict(trip.emax, E0=E0.data,
                       exact.doses=doses)
 
@@ -57,7 +57,7 @@ plot(pred)
 ## -----------------------------------------------------------------------------
 plot(pred, disp.obs = TRUE)
 
-## ---- results="hide", warning=FALSE, message=FALSE----------------------------
+## ----results="hide", warning=FALSE, message=FALSE-----------------------------
 alognet <- mbnma.network(alog_pcfb)
 alog.emax <- mbnma.run(alognet, fun=demax(), method="random")
 pred <- predict(alog.emax, E0=0, n.dose=20)

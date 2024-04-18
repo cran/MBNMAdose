@@ -1,4 +1,4 @@
-## ---- include = FALSE---------------------------------------------------------
+## ----include = FALSE----------------------------------------------------------
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 library(MBNMAdose)
 library(dplyr)
 
-## ---- loaddata----------------------------------------------------------------
+## ----loaddata-----------------------------------------------------------------
 library(netmeta)
 data("Dong2013")
 
@@ -30,21 +30,21 @@ Dong2013 <- Dong2013 %>%
   dplyr::mutate(dose=dplyr::case_when(agent=="Placebo" ~ 0,
                                       agent!="Placebo" ~ 1))
 
-## ---- network.plot, message=FALSE---------------------------------------------
+## ----network.plot, message=FALSE----------------------------------------------
 network <- mbnma.network(Dong2013)
 
 ## -----------------------------------------------------------------------------
 summary(network)
 plot(network)
 
-## ---- standard.nma, results="hide"--------------------------------------------
+## ----standard.nma, results="hide"---------------------------------------------
 nma.linear <- mbnma.run(network, fun=dpoly(degree=1),
                         n.iter=50000)
 
 ## -----------------------------------------------------------------------------
 print(nma.linear)
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 nma <- nma.run(network, n.iter=50000)
 
 ## -----------------------------------------------------------------------------
@@ -65,7 +65,7 @@ network.plac <- mbnma.network(ssi.plac)
 plot(network.plac)
 # Note that Suture-absorbable (the comparator) has been renamed to Placebo
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 # Run linear MBNMA model
 nma.linear <- mbnma.run(network.plac, fun=dpoly(degree=1),
                         n.iter=50000)
@@ -73,7 +73,7 @@ nma.linear <- mbnma.run(network.plac, fun=dpoly(degree=1),
 ## -----------------------------------------------------------------------------
 summary(nma.linear)
 
-## ---- eval=FALSE--------------------------------------------------------------
+## ----eval=FALSE---------------------------------------------------------------
 #  # Random class effect model
 #  nma.class <- mbnma.run(network.plac, fun=dpoly(degree=1),
 #                         class.effect=list(beta.1="random"),

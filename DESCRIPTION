@@ -1,9 +1,9 @@
 Package: MBNMAdose
 Type: Package
 Title: Dose-Response MBNMA Models
-Version: 0.4.2
+Version: 0.4.3
 Language: en-GB
-Date: 2023-08-07
+Date: 2024-04-18
 Authors@R: c(person("Hugo", "Pedder", 
         email = "hugopedder@gmail.com", 
         role = c("aut", "cre"), 
@@ -29,8 +29,8 @@ Imports: grDevices, stats, graphics, utils, scales, dplyr (>= 0.7.4),
 Suggests: overlapping (>= 1.5.0), ggplot2 (>= 2.2.1), RColorBrewer (>=
         1.1-2), mcmcplots (>= 0.4.3), coda (>= 0.19-4), testthat (>=
         1.0.2), crayon (>= 1.3.4), forestplot (>= 1.10), ggdist (>=
-        2.4.0), zoo (>= 1.8-8), lspline (>= 1.0-0), netmeta, knitr,
-        rmarkdown
+        2.4.0), zoo (>= 1.8-8), lspline (>= 1.0-0), formatR (>= 1.14),
+        netmeta, knitr, rmarkdown
 SystemRequirements: JAGS (>= 4.3.0)
         (https://mcmc-jags.sourceforge.net/)
 Encoding: UTF-8
@@ -39,8 +39,8 @@ VignetteBuilder: knitr
 RoxygenNote: 7.2.3
 RdMacros: Rdpack
 NeedsCompilation: no
-Packaged: 2023-08-08 07:27:38 UTC; hp17602
+Packaged: 2024-04-18 12:08:17 UTC; hp17602
 Author: Hugo Pedder [aut, cre] (<https://orcid.org/0000-0002-7813-3749>),
   Adil Karim [ctb]
 Repository: CRAN
-Date/Publication: 2023-08-08 13:00:19 UTC
+Date/Publication: 2024-04-18 12:42:47 UTC

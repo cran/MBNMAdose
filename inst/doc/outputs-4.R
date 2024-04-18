@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
   tidy=TRUE
 )
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 tripnet <- mbnma.network(triptans)
 trip.emax <- mbnma.run(tripnet, fun=demax(emax="rel", ed50="rel")) 
 
@@ -33,7 +33,7 @@ print(rels)
 # Rank relative effects
 rank(rels)
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 nma <- nma.run(tripnet) # NMA (consistency) model
 ume <- nma.run(tripnet, UME=TRUE) # UME (inconsistency) model
 
@@ -49,7 +49,7 @@ inconsistency <- get.relative(lower.diag=trip.emax, upper.diag=ume,
                             treatments = treats, eform=FALSE)
 print(inconsistency)
 
-## ---- results="hide"----------------------------------------------------------
+## ----results="hide"-----------------------------------------------------------
 plot(trip.emax)
 
 ## -----------------------------------------------------------------------------
