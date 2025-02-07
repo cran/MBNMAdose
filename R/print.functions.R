@@ -248,18 +248,14 @@ modfit.str <- function(mbnma) {
   cat(crayon::bold(crayon::underline("Model Fit Statistics\n")))
 
   # pD
-  cat("Effective number of parameters:\n")
-  if (mbnma$model.arg$pd=="pv") {
+  pd.str <- "Effective number of parameters:"
+  if (mbnma$model.arg$pD==FALSE) {
     pd <- "pD (pV) calculated using the rule, pD = var(deviance)/2 ="
-  } else if (mbnma$model.arg$pd=="plugin") {
-    pd <- "pD calculated using the plug-in method ="
-  } else if (mbnma$model.arg$pd=="pd.kl") {
+    pd.str <- paste(pd.str, paste(pd, round(mbnma$BUGSoutput$pV,0), sep=" "), sep="\n")
+  } else if (mbnma$model.arg$pD==TRUE) {
     pd <- "pD calculated using the Kullback-Leibler divergence ="
-  } else if (mbnma$model.arg$pd=="popt") {
-    pd <- "pD calculated using an optimism adjustment ="
+    pd.str <- paste(pd.str, paste(pd, round(mbnma$BUGSoutput$pD,0), sep=" "), sep="\n")
   }
-  cat(paste(pd, round(mbnma$BUGSoutput$pD,1), sep=" "))
-  cat("\n\n")
 
   # Deviance
   dev <- mbnma$BUGSoutput$summary[

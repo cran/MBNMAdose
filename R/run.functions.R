@@ -60,16 +60,9 @@
 #'   **using distributions as specified in JAGS syntax** (see \insertCite{jagsmanual;textual}{MBNMAdose}). Note
 #'   that normal distributions in JAGS are specified as \deqn{N(\mu, prec)}, where \deqn{prec = 1 / {\sigma^2}}.
 #'
-#' @param pd Can take either:
-#'   * `pv` only pV will be reported (as automatically outputted by `R2jags`).
-#'   * `plugin` calculates pD by the plug-in
-#'   method \insertCite{spiegelhalter2002}{MBNMAdose}. It is faster, but may output negative
-#'   non-sensical values, due to skewed deviances that can arise with non-linear models.
-#'   * `pd.kl` calculates pD by the Kullback-Leibler divergence \insertCite{plummer2008}{MBNMAdose}. This
-#'   will require running the model for additional iterations but is a more robust calculation for the effective
-#'   number of parameters in non-linear models.
-#'   * `popt` calculates pD using an optimism adjustment which allows for calculation
-#'   of the penalized expected deviance \insertCite{plummer2008}{MBNMAdose}.
+#' @param pD logical; if `TRUE` (the default) then adds the computation of pD, using the method
+#' of \insertCite{plummer2008}{MBNMAdose}. If `FALSE` then uses the
+#' approximation of `pD=var(deviance) / 2` (often referred to as pV).
 #' @param n.iter number of total iterations per chain (including burn in; default: 20000)
 #' @param n.thin thinning rate. Must be a positive integer. Set `n.thin > 1`` to save memory
 #' and computation time if n.iter is large. Default is
@@ -260,15 +253,6 @@
 #' result <- mbnma.run(network, fun=dloglin(), method="random",
 #'               n.iter=5000, n.thin=5, n.chains=4)
 #'
-#' # Calculate effective number of parameters via plugin method
-#' result <- mbnma.run(network, fun=dloglin(), method="random",
-#'               pd="plugin")
-#'
-#' # Calculate effective number of parameters using penalized expected deviance
-#' result <- mbnma.run(network, fun=dloglin(), method="random",
-#'               pd="popt")
-#'
-#'
 #' ####### Examine MCMC diagnostics (using mcmcplots or coda packages) #######
 #'
 #' # Density plots
@@ -314,7 +298,7 @@ mbnma.run <- function(network,
                       cor=FALSE,
                       omega=NULL,
                       parameters.to.save=NULL,
-                      pd="pd.kl",
+                      pD=TRUE,
                       likelihood=NULL, link=NULL,
                       priors=NULL,
                       n.iter=20000, n.chains=3,
@@ -327,7 +311,7 @@ mbnma.run <- function(network,
   argcheck <- checkmate::makeAssertCollection()
   checkmate::assertClass(network, "mbnma.network", add=argcheck)
   checkmate::assertCharacter(model.file, len=1, any.missing=FALSE, null.ok=TRUE, add=argcheck)
-  checkmate::assertChoice(pd, choices=c("pv", "pd.kl", "plugin", "popt"), null.ok=FALSE, add=argcheck)
+  checkmate::assertLogical(pD, null.ok=FALSE, add=argcheck)
   #checkmate::assertLogical(parallel, len=1, null.ok=FALSE, any.missing=FALSE, add=argcheck)
   checkmate::assertLogical(cor, len=1, add=argcheck)
   checkmate::assertList(priors, null.ok=TRUE, add=argcheck)
@@ -362,11 +346,11 @@ mbnma.run <- function(network,
     n.burnin <- n.burnin - 1
   }
 
-  # Ensure pd.kl or popt not run with parallel
+  # Ensure pd.kl not run with parallel
   parallel <- FALSE
-  if (parallel==TRUE & pd %in% c("pd.kl", "popt")) {
-    warning("pd cannot be calculated using Kullback-Leibler divergence (pd=`pk.kl` or pd=`popt`) for\nmodels run in parallel. Defaulting to pd=`pv`")
-    pd <- "pv"
+  if (parallel==TRUE & pD==TRUE) {
+    warning("pD cannot be calculated using Kullback-Leibler divergence for\nmodels run in parallel. Defaulting to pD=FALSE")
+    pD <- FALSE
   }
 
   # Ensure cor set to FALSE if multiple dose-response functions are modelled
@@ -442,18 +426,6 @@ mbnma.run <- function(network,
       gen.parameters.to.save(fun=fun, model=model, regress.mat = regress.mat)
   }
 
-  # Add nodes to monitor to calculate plugin pd
-  if (pd=="plugin") {
-    pluginvars <- c("psi", "resdev")
-    for (param in seq_along(pluginvars)) {
-      if (!(pluginvars[param] %in% parameters.to.save)) {
-        parameters.to.save <- append(parameters.to.save, pluginvars[param])
-      }
-    }
-    message("The following parameters have been monitored to allow pD plugin calculation: ",
-            paste(pluginvars, collapse=", "))
-  }
-
   # Set boolean for presence of class effects in model
   class <- ifelse(length(class.effect)>0 | "class" %in% regress.effect, TRUE, FALSE)
 
@@ -477,7 +449,7 @@ mbnma.run <- function(network,
                             n.thin=n.thin,
                             n.chains=n.chains,
                             n.burnin=n.burnin,
-                            parallel=parallel,
+                            parallel=parallel, pD=pD,
                             autojags=autojags, Rhat=Rhat, n.update=n.update,
                             ...)
   result <- result.jags[["jagsoutput"]]
@@ -485,11 +457,11 @@ mbnma.run <- function(network,
 
 
   # Calculate model fit statistics (using differnt pD as specified)
-  if (!"error" %in% names(result)) {
-    fitstats <- changepd(model=result, jagsdata=jagsdata, pd=pd, likelihood=likelihood, type="dose")
-    result$BUGSoutput$pD <- fitstats$pd
-    result$BUGSoutput$DIC <- fitstats$dic
-  }
+  # if (!"error" %in% names(result)) {
+  #   fitstats <- changepd(model=result, jagsdata=jagsdata, pd=pd, likelihood=likelihood, type="dose")
+  #   result$BUGSoutput$pD <- fitstats$pd
+  #   result$BUGSoutput$DIC <- fitstats$dic
+  # }
 
   # Define model arguments
   model.arg <- list("parameters.to.save"=assigned.parameters.to.save,
@@ -505,7 +477,7 @@ mbnma.run <- function(network,
                     "UME"=UME,
                     "sdscale"=sdscale,
                     #"parallel"=parallel,
-                    "pd"=pd,
+                    "pD"=pD,
                     "priors"=get.prior(model))
 
   result[["model.arg"]] <- model.arg
@@ -625,30 +597,34 @@ mbnma.jags <- function(data.ab, model,
   close(tmps)
 
   out <- tryCatch({
-    if (parallel==FALSE) {
-      result <- do.call(R2jags::jags, c(args, list(data = jagsvars,
-                                                   model.file = tmpf)))
+    withCallingHandlers({
+      if (parallel == FALSE) {
+        result <- do.call(R2jags::jags, c(args, list(data = jagsvars, model.file = tmpf)))
 
-      # AUtomatically update
-      if (autojags==TRUE) {
-        result <- R2jags::autojags(result, Rhat=Rhat, n.update=n.update, n.iter=1000, refresh=100)
-      } else if (autojags==FALSE) {
+        # Automatically update
+        if (autojags == TRUE) {
+          result <- R2jags::autojags(result, Rhat = Rhat, n.update = n.update, n.iter = 1000, refresh = 100)
+        } else if (autojags == FALSE) {
           result <- result
         }
-    } else if (parallel==TRUE) {
-      if (autojags==TRUE) {
-        stop("autojags=TRUE cannot be used with parallel=TRUE")
-      }
+      } else if (parallel == TRUE) {
+        if (autojags == TRUE) {
+          stop("autojags=TRUE cannot be used with parallel=TRUE")
+        }
 
-      # Run jags in parallel
-      result <- do.call(R2jags::jags.parallel, c(args, list(data=jagsvars, model.file=tmpf)))
-    }
+        # Run jags in parallel
+        result <- do.call(R2jags::jags.parallel, c(args, list(data = jagsvars, model.file = tmpf)))
+      }
+    }, warning = function(w) {
+      if (grepl("missing in parameter", conditionMessage(w))) {
+        invokeRestart("muffleWarning")
+      }
+    })
   },
-  error=function(cond) {
+  error = function(cond) {
     message(cond)
-    return(list(error=cond))
-  }
-  )
+    return(list(error = cond))
+  })
 
   # Gives warning if any rhat values > 1.02
   if (warn.rhat==TRUE) {
@@ -825,7 +801,7 @@ gen.parameters.to.save <- function(fun, model, regress.mat=NULL) {
 #' @export
 nma.run <- function(network, method="common", likelihood=NULL, link=NULL, priors=NULL,
                     sdscale=FALSE,
-                    warn.rhat=TRUE, n.iter=20000, drop.discon=TRUE, UME=FALSE, pd="pd.kl",
+                    warn.rhat=TRUE, n.iter=20000, drop.discon=TRUE, UME=FALSE, pD=TRUE,
                     parameters.to.save=NULL, ...) {
 
   # Run checks
@@ -837,7 +813,7 @@ nma.run <- function(network, method="common", likelihood=NULL, link=NULL, priors
   checkmate::assertLogical(drop.discon, add=argcheck)
   checkmate::assertLogical(UME, add=argcheck)
   checkmate::assertList(priors, null.ok=TRUE, add=argcheck)
-  checkmate::assertChoice(pd, choices=c("pv", "pd.kl", "plugin", "popt"), null.ok=FALSE, add=argcheck)
+  checkmate::assertLogical(pD, null.ok=FALSE, add=argcheck)
   checkmate::assertCharacter(parameters.to.save, null.ok=TRUE, add=argcheck)
   checkmate::reportAssertions(argcheck)
 
@@ -893,17 +869,17 @@ nma.run <- function(network, method="common", likelihood=NULL, link=NULL, priors
   }
 
 
-  # Add nodes to monitor to calculate plugin pd
-  if (pd=="plugin") {
-    pluginvars <- c("psi", "resdev")
-    for (param in seq_along(pluginvars)) {
-      if (!(pluginvars[param] %in% parameters.to.save)) {
-        parameters.to.save <- append(parameters.to.save, pluginvars[param])
-      }
-    }
-    message("The following parameters have been monitored to allow pD plugin calculation: ",
-            paste(pluginvars, collapse=", "))
-  }
+  # # Add nodes to monitor to calculate plugin pd
+  # if (pd=="plugin") {
+  #   pluginvars <- c("psi", "resdev")
+  #   for (param in seq_along(pluginvars)) {
+  #     if (!(pluginvars[param] %in% parameters.to.save)) {
+  #       parameters.to.save <- append(parameters.to.save, pluginvars[param])
+  #     }
+  #   }
+  #   message("The following parameters have been monitored to allow pD plugin calculation: ",
+  #           paste(pluginvars, collapse=", "))
+  # }
 
   #### Prepare data ####
   data.ab <- network$data.ab
@@ -948,14 +924,19 @@ nma.run <- function(network, method="common", likelihood=NULL, link=NULL, priors
   close(tmps)
 
   out <- tryCatch({
-    result <- do.call(R2jags::jags, c(args, list(data=jagsvars, model.file=tmpf, n.iter=n.iter,
-                                                 parameters.to.save=parameters.to.save)))
+    withCallingHandlers({
+      result <- do.call(R2jags::jags, c(args, list(data=jagsvars, model.file=tmpf, n.iter=n.iter,
+                                                   parameters.to.save=parameters.to.save)))
+    }, warning = function(w) {
+      if (grepl("missing in parameter", conditionMessage(w))) {
+        invokeRestart("muffleWarning")
+      }
+    })
   },
-  error=function(cond) {
+  error = function(cond) {
     message(cond)
-    return(list("error"=cond))
-  }
-  )
+    return(list(error = cond))
+  })
 
   # Gives warning if any rhat values > 1.02
   if (warn.rhat==TRUE) {
@@ -965,9 +946,9 @@ nma.run <- function(network, method="common", likelihood=NULL, link=NULL, priors
   }
 
   # Calculate model fit statistics (using differnt pD as specified)
-  fitstats <- changepd(model=result, jagsdata=jagsdata, pd=pd, likelihood=likelihood, type="dose")
-  out$BUGSoutput$pD <- fitstats$pd
-  out$BUGSoutput$DIC <- fitstats$dic
+  # fitstats <- changepd(model=result, jagsdata=jagsdata, pd=pd, likelihood=likelihood, type="dose")
+  # out$BUGSoutput$pD <- fitstats$pd
+  # out$BUGSoutput$DIC <- fitstats$dic
 
   output <- list("jagsresult"=out, "trt.labs"=trt.labs, "UME"=UME)
   class(output) <- "nma"
@@ -1358,64 +1339,3 @@ mbnma.update <- function(mbnma, param="theta", armdat=TRUE,
 
 
 
-
-
-
-
-
-#' Update model fit statistics depending on calculation for pD
-#'
-#' @param model A model object of class `"rjags"`
-#' @param jagsdata A list object containing data used to estimate `model`
-#' @param type Can take either `"dose"` for a dose-response MBNMA or `"time"` for a
-#' time-course MBNMA (this accounts for multiple observations within an arm)
-#'
-#' @return A list containing `pd` (effective number of parameters calculated using the method
-#' specified in arguments), `deviance` (the posterior median of the total residual deviance)
-#' and `dic` (the model DIC)
-#'
-#' @inheritParams mbnma.run
-changepd <- function(model, jagsdata=NULL, pd="pv", likelihood=NULL, type="dose") {
-
-  # Run checks
-  argcheck <- checkmate::makeAssertCollection()
-  checkmate::assertList(jagsdata, null.ok=TRUE, add=argcheck)
-  checkmate::assertChoice(pd, choices=c("pv", "pd.kl", "plugin", "popt"), null.ok=FALSE, add=argcheck)
-  checkmate::assertCharacter(likelihood, null.ok=TRUE, add=argcheck)
-  checkmate::assertChoice(type, choices=c("dose", "time"), add=argcheck)
-  checkmate::reportAssertions(argcheck)
-
-  pdout <- model$BUGSoutput$pD
-
-  # pd by MCMC sampling methods (pd.kl or popt)
-  if (pd == "pd.kl" | pd == "popt") {
-    if (pd=="pd.kl") {
-      temp <- rjags::dic.samples(model$model, n.iter=1000, type="pD")
-    } else if (pd=="popt") {
-      temp <- rjags::dic.samples(model$model, n.iter=1000, type="popt")
-    }
-    pdout <- sum(temp$penalty)
-
-  } else if (pd == "plugin") {
-    # plugin method
-    if (likelihood=="normal") {
-      obs1 <- jagsdata[["y"]]
-      obs2 <- jagsdata[["se"]]
-    } else if (likelihood=="binomial") {
-      obs1 <- jagsdata[["r"]]
-      obs2 <- jagsdata[["n"]]
-    } else if (likelihood=="poisson") {
-      obs1 <- jagsdata[["r"]]
-      obs2 <- jagsdata[["E"]]
-    }
-    pdout <- pDcalc(obs1=obs1, obs2=obs2, narm=jagsdata[["narm"]], NS=jagsdata[["NS"]],
-                    theta.result=model$BUGSoutput$mean$psi, resdev.result=model$BUGSoutput$mean$resdev,
-                    likelihood=likelihood, type=type)
-  }
-
-  # Recalculate DIC so it is adjusted for choice of pD
-  dicout <- pdout + model$BUGSoutput$median$deviance
-  devout <- model$BUGSoutput$median$deviance
-
-  return(list("pd"=pdout, "deviance"=devout, "dic"=dicout))
-}

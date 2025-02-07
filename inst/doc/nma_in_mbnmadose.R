@@ -12,6 +12,7 @@ knitr::opts_chunk$set(
 ## ----setup, include = FALSE---------------------------------------------------
 library(MBNMAdose)
 library(dplyr)
+library(ggplot2)
 
 ## ----loaddata-----------------------------------------------------------------
 library(netmeta)

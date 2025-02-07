@@ -350,7 +350,7 @@ inconsistency.loops <- function(df, checkindirect=TRUE, incldr=FALSE)
     g <- g + edges
 
     # Check whether there is still an indirect connection once direct evidence studies are removed
-    if (as.logical(is.finite(igraph::shortest.paths(igraph::as.undirected(g),
+    if (as.logical(is.finite(igraph::distances(igraph::as.undirected(g),
                                                     comparisons[i,1], comparisons[i,2]))) == TRUE) {
 
       # Check if dropping 2-arm studies with both treatments and then either arm from multi-arm
@@ -533,7 +533,7 @@ drop.comp <- function(ind.df, drops, comp, start=1) {
     if (all(comp %in% temp.df$treatment)) {
       temp.net <- suppressMessages(plot.invisible(mbnma.network(temp.df), doseparam = 1000))
 
-      connectcheck <- is.finite(igraph::shortest.paths(igraph::as.undirected(temp.net),
+      connectcheck <- is.finite(igraph::distances(igraph::as.undirected(temp.net),
                                                        to=comp[index+1])[
                                                          c(comp[1], comp[2])
                                                          ])
@@ -601,7 +601,7 @@ check.indirect.drops <- function(df, comp) {
     nt <- length(temp.net$treatments)
     if (nt==length(unique(df$treatment))) {
       g <- plot.invisible(temp.net, doseparam=1000)
-      connectcheck <- is.finite(igraph::shortest.paths(igraph::as.undirected(g),
+      connectcheck <- is.finite(igraph::distances(igraph::as.undirected(g),
                                                        to=1)[
                                                          c(comp[1], comp[2])
                                                          ])
@@ -707,10 +707,10 @@ mbnma.nodesplit <- function(network, fun=dpoly(degree=1),
     comparisons <- check.nodesplit.comparisons(data.ab, network, comparisons, trt.labs)
   }
 
-  # Set default for pd="pv" unless otherwise specified for faster running
+  # Set default for pD=FALSE unless otherwise specified for faster running
   args <- list(...)
-  if (!"pd" %in% names(args)) {
-    args[["pd"]] <- "pv"
+  if (!"pD" %in% names(args)) {
+    args[["pD"]] <- FALSE
   }
 
 
@@ -1058,7 +1058,7 @@ get.relative <- function(lower.diag, upper.diag=lower.diag, treatments=list(),
       trtnew <- treatments
 
       # Generate spline basis matrix if required
-      splineopt <- c("rcs", "bs", "ns", "ls")
+      splineopt <- c("rcs", "bs", "ns", "ls", "is")
       fun <- mbnma$model.arg$fun
 
       # Get indices of non-placebo agents

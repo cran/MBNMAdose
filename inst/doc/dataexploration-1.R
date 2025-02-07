@@ -4,6 +4,7 @@ library(MBNMAdose)
 library(rmarkdown)
 library(knitr)
 library(dplyr)
+library(ggplot2)
 
 knitr::opts_chunk$set(
   collapse = TRUE,
